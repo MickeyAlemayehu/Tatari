@@ -77,4 +77,14 @@ class Employee extends Authenticatable
     public function compensations() {
         return $this->hasMany(Compensation::class);
     }
+
+    public function performanceReviews()
+    {
+        return $this->hasMany(PerformanceReview::class, 'employee_id');
+    }
+
+    public function performanceReviewsGiven()
+    {
+        return $this->hasMany(PerformanceReview::class, 'reviewer_id');
+    }
 }

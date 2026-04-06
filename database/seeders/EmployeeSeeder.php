@@ -22,6 +22,7 @@ class EmployeeSeeder extends Seeder
                 'permission_level' => 10,
                 'permission_override' => [
                     'manage_payroll' => true,
+                    'manage_employees' => true,
                     'approve_leave' => true,
                 ],
                 'revoked_permissions' => [],
@@ -40,6 +41,7 @@ class EmployeeSeeder extends Seeder
                 'permission_level' => 6,
                 'permission_override' => [
                     'manage_payroll' => true,
+                    'manage_employees' => true,
                 ],
                 'revoked_permissions' => [],
                 'must_change_password' => false,
