@@ -1,20 +1,20 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { Eye, EyeOff } from "lucide-react";
 
 export function Login() {
   const navigate = useNavigate();
-
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
+    // Simple validation
     if (!email || !password) {
       setError("Please enter both email and password");
       return;
@@ -25,7 +25,7 @@ export function Login() {
       return;
     }
 
-    // Mock login
+    // Mock login - in a real app, this would call an API
     if (email && password) {
       navigate("/select-role");
     }
@@ -34,6 +34,7 @@ export function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#F9FAFB] to-[#EEF2FF] p-4">
       <div className="w-full max-w-md">
+        {/* Login Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8">
           {/* Logo */}
           <div className="flex justify-center mb-8">
@@ -60,7 +61,7 @@ export function Login() {
             <p className="text-[#6B7280]">Sign in to your HR account</p>
           </div>
 
-          {/* Error */}
+          {/* Error Message */}
           {error && (
             <div className="mb-6 p-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg">
               <p className="text-sm text-[#EF4444]">{error}</p>
@@ -69,70 +70,89 @@ export function Login() {
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Email Input */}
             <div>
-              <label className="block text-sm mb-2 text-[#111827]">
+              <label htmlFor="email" className="block text-sm mb-2 text-[#111827]">
                 Email Address
               </label>
               <input
+                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@company.com"
-                className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition"
               />
             </div>
 
+            {/* Password Input */}
             <div>
-              <label className="block text-sm mb-2 text-[#111827]">
+              <label htmlFor="password" className="block text-sm mb-2 text-[#111827]">
                 Password
               </label>
               <div className="relative">
                 <input
+                  id="password"
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 pr-12 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                  placeholder="Enter your password"
+                  className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition pr-12"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7280] hover:text-[#6B7280] transition"
                 >
-                  {showPassword ? <EyeOff /> : <Eye />}
+                  {showPassword ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
 
-            <div className="flex justify-between items-center">
-              <label className="flex items-center text-sm text-[#6B7280]">
+            {/* Remember Me & Forgot Password */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
                 <input
+                  id="remember"
                   type="checkbox"
                   checked={rememberMe}
                   onChange={(e) => setRememberMe(e.target.checked)}
-                  className="mr-2"
+                  className="w-4 h-4 text-[#4F46E5] border-[#E5E7EB] rounded focus:ring-[#4F46E5] cursor-pointer"
                 />
-                Remember me
-              </label>
-              <a href="#" className="text-sm text-[#4F46E5]">
+                <label htmlFor="remember" className="ml-2 text-sm text-[#6B7280] cursor-pointer">
+                  Remember me
+                </label>
+              </div>
+              <a href="#" className="text-sm text-[#4F46E5] hover:text-indigo-700 transition">
                 Forgot password?
               </a>
             </div>
 
-            <button className="w-full bg-[#4F46E5] text-white py-3 rounded-lg">
+            {/* Login Button */}
+            <button
+              type="submit"
+              className="w-full bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white py-3 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 active:translate-y-0"
+            >
               Sign In
             </button>
           </form>
 
+          {/* Footer */}
           <p className="text-center text-sm text-[#6B7280] mt-6">
             Don't have an account?{" "}
-            <span className="text-[#4F46E5]">
+            <a href="#" className="text-[#4F46E5] hover:text-indigo-700 transition">
               Contact your administrator
-            </span>
+            </a>
           </p>
         </div>
 
+        {/* Copyright */}
         <p className="text-center text-sm text-[#6B7280] mt-6">
-          © 2026 HR Management System
+          © 2026 HR Management System. All rights reserved.
         </p>
       </div>
     </div>

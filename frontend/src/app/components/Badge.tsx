@@ -1,4 +1,10 @@
-export function Badge({ children, variant = "default", size = "md" }) {
+interface BadgeProps {
+  children: React.ReactNode;
+  variant?: "success" | "warning" | "danger" | "info" | "default";
+  size?: "sm" | "md";
+}
+
+export function Badge({ children, variant = "default", size = "md" }: BadgeProps) {
   const variants = {
     success: "bg-[#DCFCE7] text-[#22C55E] border-[#22C55E]/20",
     warning: "bg-[#FFFBEB] text-[#F59E0B] border-[#F59E0B]/20",

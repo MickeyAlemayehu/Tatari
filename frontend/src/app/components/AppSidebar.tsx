@@ -1,4 +1,4 @@
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router";
 import {
   Home,
   Users,
@@ -21,13 +21,19 @@ import {
   ClipboardList,
   Laptop,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+
+interface NavigationItem {
+  name: string;
+  icon: any;
+  path: string;
+  children?: NavigationItem[];
+}
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  const [expandedSections, setExpandedSections] = useState([
+  const [expandedSections, setExpandedSections] = useState<string[]>([
     "leave-management",
     "performance",
   ]);
@@ -39,17 +45,14 @@ export function AppSidebar() {
     ? "admin"
     : "hr";
 
-  const isActive = (path) => {
+  const isActive = (path: string) => {
     if (path.includes("/dashboard")) {
       return location.pathname.includes("/dashboard");
     }
-    return (
-      location.pathname.startsWith(path) ||
-      location.pathname.includes(path)
-    );
+    return location.pathname.startsWith(path) || location.pathname.includes(path);
   };
 
-  const toggleSection = (sectionName) => {
+  const toggleSection = (sectionName: string) => {
     setExpandedSections((prev) =>
       prev.includes(sectionName)
         ? prev.filter((s) => s !== sectionName)
@@ -57,7 +60,7 @@ export function AppSidebar() {
     );
   };
 
-  const isSectionActive = (item) => {
+  const isSectionActive = (item: NavigationItem) => {
     if (item.children) {
       return item.children.some((child) => isActive(child.path));
     }
@@ -65,7 +68,7 @@ export function AppSidebar() {
   };
 
   // EMPLOYEE NAVIGATION
-  const employeeNavigation = [
+  const employeeNavigation: NavigationItem[] = [
     {
       name: "Dashboard",
       icon: Home,
@@ -117,7 +120,7 @@ export function AppSidebar() {
   ];
 
   // HR NAVIGATION
-  const hrNavigation = [
+  const hrNavigation: NavigationItem[] = [
     {
       name: "Dashboard",
       icon: Home,
@@ -178,7 +181,7 @@ export function AppSidebar() {
   ];
 
   // ADMIN NAVIGATION
-  const adminNavigation = [
+  const adminNavigation: NavigationItem[] = [
     {
       name: "Dashboard",
       icon: Home,
@@ -211,6 +214,7 @@ export function AppSidebar() {
     },
   ];
 
+  // Select navigation based on current role
   const navigation =
     currentRole === "employee"
       ? employeeNavigation
@@ -222,19 +226,22 @@ export function AppSidebar() {
     navigate("/");
   };
 
-  const renderNavItem = (item, isChild = false) => {
+  const renderNavItem = (item: NavigationItem, isChild = false) => {
     const Icon = item.icon;
     const active = isActive(item.path);
     const hasChildren = item.children && item.children.length > 0;
-    const keyName = item.name.toLowerCase().replace(/\s+/g, "-");
-    const isExpanded = expandedSections.includes(keyName);
+    const isExpanded = expandedSections.includes(
+      item.name.toLowerCase().replace(/\s+/g, "-")
+    );
     const sectionActive = isSectionActive(item);
 
-    if (hasChildren) {
+    if (hasChildren && item.children && item.children.length > 0) {
       return (
         <div key={item.path}>
           <button
-            onClick={() => toggleSection(keyName)}
+            onClick={() =>
+              toggleSection(item.name.toLowerCase().replace(/\s+/g, "-"))
+            }
             className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition ${
               sectionActive
                 ? "bg-[rgba(255,255,255,0.08)] text-[#E5E7EB]"
@@ -245,19 +252,15 @@ export function AppSidebar() {
               <Icon className="w-5 h-5 flex-shrink-0" />
               <span className="text-sm">{item.name}</span>
             </div>
-
             {isExpanded ? (
-              <ChevronDown className="w-4 h-4" />
+              <ChevronDown className="w-4 h-4 flex-shrink-0" />
             ) : (
-              <ChevronRight className="w-4 h-4" />
+              <ChevronRight className="w-4 h-4 flex-shrink-0" />
             )}
           </button>
-
           {isExpanded && (
             <div className="ml-4 mt-1 space-y-1 border-l border-[rgba(255,255,255,0.1)] pl-4">
-              {item.children.map((child) =>
-                renderNavItem(child, true)
-              )}
+              {item.children.map((child) => renderNavItem(child, true))}
             </div>
           )}
         </div>
@@ -276,7 +279,7 @@ export function AppSidebar() {
             : "text-[#E5E7EB] hover:bg-[rgba(255,255,255,0.08)]"
         }`}
       >
-        <Icon className={`${isChild ? "w-4 h-4" : "w-5 h-5"}`} />
+        <Icon className={`${isChild ? "w-4 h-4" : "w-5 h-5"} flex-shrink-0`} />
         <span className="text-sm">{item.name}</span>
       </button>
     );
@@ -284,20 +287,19 @@ export function AppSidebar() {
 
   return (
     <aside className="hidden lg:block w-64 bg-[#111827] border-r border-[rgba(255,255,255,0.1)] flex flex-col h-full fixed left-0 top-0 bottom-0">
-      <div className="px-6 py-5 border-b border-[rgba(255,255,255,0.1)]">
-        <h2 className="text-base text-[#E5E7EB] font-semibold">
-          HR System
-        </h2>
-        <p className="text-xs text-[#6B7280] mt-1 capitalize">
-          {currentRole} Portal
-        </p>
+      {/* Logo/Brand */}
+      <div className="px-6 py-5 border-b border-[rgba(255,255,255,0.1)] flex-shrink-0">
+        <h2 className="text-base text-[#E5E7EB] font-semibold">HR System</h2>
+        <p className="text-xs text-[#6B7280] mt-1 capitalize">{currentRole} Portal</p>
       </div>
 
+      {/* Main Navigation */}
       <nav className="flex-1 px-4 py-6 overflow-y-auto">
         <div className="space-y-1">
           {navigation.map((item) => renderNavItem(item))}
         </div>
 
+        {/* Settings for Employee */}
         {currentRole === "employee" && (
           <div className="mt-8 pt-6 border-t border-[rgba(255,255,255,0.1)]">
             <button
@@ -308,19 +310,20 @@ export function AppSidebar() {
                   : "text-[#E5E7EB] hover:bg-[rgba(255,255,255,0.08)]"
               }`}
             >
-              <Settings className="w-5 h-5" />
+              <Settings className="w-5 h-5 flex-shrink-0" />
               <span className="text-sm">Settings</span>
             </button>
           </div>
         )}
       </nav>
 
-      <div className="border-t border-[rgba(255,255,255,0.1)] px-4 py-4">
+      {/* Bottom Navigation - Logout */}
+      <div className="border-t border-[rgba(255,255,255,0.1)] px-4 py-4 flex-shrink-0">
         <button
           onClick={handleLogout}
           className="w-full flex items-center gap-3 px-3 py-2.5 text-[#E5E7EB] hover:bg-[rgba(239,68,68,0.1)] hover:text-[#EF4444] rounded-lg transition"
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="w-5 h-5 flex-shrink-0" />
           <span className="text-sm">Logout</span>
         </button>
       </div>
