@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Mail, Phone, Briefcase, Calendar, MapPin, Edit2, Save, X, User, Lock, Bell, Shield } from "lucide-react";
+import { ArrowLeft, Mail, Phone, Briefcase, Calendar, MapPin, Edit2, Save, X, User, Lock, Bell, Shield, CheckCircle } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 
@@ -148,7 +148,7 @@ export function Profile() {
                     </div>
                   </div>
                   <div className="mt-3">
-                    <Badge color="green" icon="check-circle">
+                    <Badge variant="success" icon={<CheckCircle className="w-4 h-4" />}>
                       Active Employee
                     </Badge>
                   </div>
