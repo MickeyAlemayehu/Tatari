@@ -2,30 +2,32 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class Payroll extends Model
 {
     use HasFactory;
 
-    public $timestamps = false;
+    protected $primaryKey = 'payroll_id';
 
     protected $fillable = [
-        'employee_id','company_id','year','month',
-        'basic_salary','total_allowances','bonuses',
-        'deductions','unpaid_leave_days','unpaid_leave_amount',
-        'status','generated_at','approved_by','approved_at'
+        'employee_id', 'company_id', 'year', 'month',
+        'basic_salary', 'total_allowances', 'bonuses',
+        'deductions', 'unpaid_leave_days', 'unpaid_leave_amount',
+        'gross_salary', 'net_salary', 'status', 'generated_at',
+        'approved_by', 'approved_at', 'rejection_remarks'
     ];
 
     public function employee() {
-        return $this->belongsTo(Employee::class);
+        return $this->belongsTo(Employee::class, 'employee_id');
     }
 
     public function company() {
-        return $this->belongsTo(Company::class);
+        return $this->belongsTo(Company::class, 'company_id');
     }
 
     public function approver() {
-        return $this->belongsTo(Employee::class, 'approved_by');
+        return $this->belongsTo(User::class, 'approved_by');
     }
 }

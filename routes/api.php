@@ -36,3 +36,11 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
     });
 });
+
+use App\Http\Controllers\PayrollController;
+
+Route::prefix('payroll')->group(function () {
+    Route::post('/generate', [PayrollController::class, 'generate']);
+    Route::post('/{id}/approve', [PayrollController::class, 'approve']);
+    Route::post('/{id}/reject', [PayrollController::class, 'reject']);
+});
