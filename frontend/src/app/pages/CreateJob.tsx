@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Save, Plus, Trash2, AlertCircle, CheckCircle } from "lucide-react";
+import { ArrowLeft, Save,FileText, Plus, Trash2, AlertCircle, CheckCircle } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 
 export function CreateJob() {

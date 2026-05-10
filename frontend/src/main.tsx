@@ -120,6 +120,201 @@ const router = createBrowserRouter([
   path: "/employee/profile",
   element: <MyProfile />,
 },
+{
+  path: "/employee/department",
+  element: <MyDepartment />,
+},
+{
+  path: "/employee/leave",
+  element: <EmployeeLeaveManagement />,
+},
+{
+  path: "/employee/performance",
+  element: <EmployeePerformance />,
+},
+{
+  path: "/employee/evaluation/:type/:id",
+  element: <EmployeeEvaluationForm />,
+},
+{
+  path: "/employee/performance/results/:id",
+  element: <PerformanceResults />,
+},
+{
+  path: "/employee/equipment",
+  element: <Equipment />,
+},
+
+{
+  path: "/employee/payslip/:id",
+  element: <Payslip />,
+},
+{
+  path: "/employee/notifications",
+  element: <Notifications />,
+},
+{
+  path: "/employee/settings",
+  element: <EmployeeSettings />,
+},
+{
+  path: "/hr/dashboard",
+  element: <HRDashboard />,
+},
+
+{
+  path: "/admin/dashboard",
+  element: <Dashboard />,
+},
+
+{
+  path: "/profile",
+  element: <Profile />,
+},
+{
+  path: "/notifications",
+  element: <Notifications />,
+},
+{
+  path: "/employees",
+  element: <EmployeeManagement />,
+},
+{
+  path: "/employees/new",
+  element: <CreateEmployee />,
+},
+
+{
+  path: "/employees/import",
+  element: <BulkImport />,
+},
+{
+  path: "/employees/:id",
+  element: <EmployeeProfile />,
+},
+{
+  path: "/departments",
+  element: <DepartmentManagement />,
+},
+
+{
+  path: "/departments/new",
+  element: <DepartmentForm />,
+},
+
+{
+  path: "/departments/:id/edit",
+  element: <DepartmentForm />,
+},
+
+{
+  path: "/leave",
+  element: <LeaveManagement />,
+},
+{
+  path: "/leave/:id",
+  element: <LeaveDetail />,
+},
+{
+  path: "/performance",
+  element: <PerformanceManagement />,
+},
+{
+  path: "/performance/builder",
+  element: <EvaluationBuilder />,
+},
+{
+  path: "/performance/structure",
+  element: <EvaluationStructure />,
+},
+
+{
+  path: "/performance/results-table",
+  element: <PerformanceResultsTable />,
+},
+
+{
+  path: "/performance/create",
+  element: <CreateEvaluationPeriod />,
+},
+
+{
+  path: "/performance/assign-peers",
+  element: <AssignPeerEvaluators />,
+},
+
+{
+  path: "/performance/self-evaluation",
+  element: <SelfEvaluation />,
+},
+
+{
+  path: "/performance/peer-evaluation/:id",
+  element: <PeerEvaluation />,
+},
+
+{
+  path: "/performance/manager-evaluation",
+  element: <ManagerEvaluation />,
+},
+{
+  path: "/performance/results/:id",
+  element: <PerformanceResults />,
+},
+{
+  path: "/jobs",
+  element: <JobVacancies />,
+},
+{
+  path: "/jobs/new",
+  element: <CreateJob />,
+},
+{
+  path: "/jobs/:id",
+  element: <JobDetails />,
+},
+{
+  path: "/applicants",
+  element: <ApplicantManagement />,
+},
+{
+  path: "/applicants/:id",
+  element: <ApplicantProfile />,
+},
+{
+  path: "/payroll",
+  element: <PayrollDashboard />,
+},
+{
+  path: "/payroll/generate",
+  element: <PayrollGeneration />,
+},
+{
+  path: "/payroll/import",
+  element: <PayrollImport />,
+},
+{
+  path: "/payroll/:id/review",
+  element: <PayrollReview />,
+},
+{
+  path: "/payroll/:id/approve",
+  element: <PayrollApproval />,
+},
+{
+  path: "/payslip/:id",
+  element: <Payslip />,
+},
+{
+  path: "*",
+  element: <NotFound />,
+}
+
+
+
+
+
+
 
 
 

@@ -12,11 +12,15 @@ import {
   CheckCircle,
   XCircle,
   MessageSquare,
-  Linkedin,
-  Github,
+ 
   Globe,
   Award,
   GraduationCap,
+  FileText,
+  ExternalLink,
+  Eye,
+  Building,
+  Clock,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";

@@ -1,6 +1,27 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Building, Save, Edit, MapPin, Globe, Phone, Mail, Users, Calendar, AlertCircle, CheckCircle } from "lucide-react";
+import { Building,
+  Save,
+  Edit,
+  MapPin,
+  Globe,
+  Phone,
+  Mail,
+  Users,
+  Calendar,
+  AlertCircle,
+  CheckCircle,
+  UserCheck,
+  Settings,
+  Briefcase,
+  Clock,
+  ArrowLeft,
+  BarChart3,
+  CreditCard,
+  Shield,
+  FileText,
+  DollarSign,
+  Activity, } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 
 interface Company {
