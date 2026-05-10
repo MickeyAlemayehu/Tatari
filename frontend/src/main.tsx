@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import "./index.css";
 import { RoleSelection } from "./app/pages/RoleSelection";
 import { EmployeeLogin } from "./app/pages/EmployeeLogin";
 import { HRLogin } from "./app/pages/HRLogin";
@@ -118,10 +119,6 @@ const router = createBrowserRouter([
 {
   path: "/employee/profile",
   element: <MyProfile />,
-},
-{
-  path: "/employee/department",
-  element: <MyDepartment />,
 },
 
 
