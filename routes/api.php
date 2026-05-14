@@ -6,6 +6,7 @@ use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\LeaveManagementController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PerformanceReviewController;
 use Illuminate\Support\Facades\Route;
 
@@ -29,6 +30,13 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/leave-requests/{leaveRequest}', [LeaveManagementController::class, 'show']);
     Route::post('/leave-requests/{leaveRequest}/cancel', [LeaveManagementController::class, 'cancel']);
     Route::get('/leave-balances/my', [LeaveManagementController::class, 'myBalances']);
+
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/read', [NotificationController::class, 'clearRead']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markAsRead']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
 
     Route::get('/admin/payroll', function () {
         return response()->json(['message' => 'Payroll management API access granted']);

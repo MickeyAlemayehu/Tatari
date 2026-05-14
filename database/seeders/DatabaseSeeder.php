@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             LeaveSeeder::class,
             RecruitmentSeeder::class,
             PerformanceReviewSeeder::class,
+            NotificationSeeder::class,
         ]);
     }
 }
