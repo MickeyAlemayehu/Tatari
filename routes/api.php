@@ -8,6 +8,7 @@ use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\LeaveManagementController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PayrollController;
+use App\Http\Controllers\PerformanceEvaluationWorkflowController;
 use App\Http\Controllers\PerformanceReviewController;
 use Illuminate\Support\Facades\Route;
 
@@ -51,6 +52,10 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/performance-reviews/{performanceReview}/submit', [PerformanceReviewController::class, 'submit']);
     Route::post('/performance-reviews/{performanceReview}/complete', [PerformanceReviewController::class, 'complete']);
 
+    Route::get('/evaluation-assignments/my', [PerformanceEvaluationWorkflowController::class, 'myAssignments']);
+    Route::post('/evaluation-assignments/{assignment}/submit', [PerformanceEvaluationWorkflowController::class, 'submitEvaluation']);
+    Route::get('/performance-results/my', [PerformanceEvaluationWorkflowController::class, 'myResults']);
+
     // Employee management API (admin)
     Route::middleware('employee.permission:6,manage_employees')->group(function () {
         Route::get('/employees', [EmployeeController::class, 'index']);
@@ -84,6 +89,14 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/applicants', [ApplicantController::class, 'index']);
         Route::get('/applicants/{applicant}', [ApplicantController::class, 'show']);
         Route::patch('/applicants/{applicant}', [ApplicantController::class, 'update']);
+    });
+
+    Route::middleware('employee.permission:4,performance_create')->group(function () {
+        Route::get('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'periods']);
+        Route::post('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'storePeriod']);
+        Route::get('/evaluation-assignments', [PerformanceEvaluationWorkflowController::class, 'assignments']);
+        Route::post('/evaluation-assignments/assign-peers', [PerformanceEvaluationWorkflowController::class, 'assignPeers']);
+        Route::get('/performance-results', [PerformanceEvaluationWorkflowController::class, 'results']);
     });
 
     Route::get('/payroll/my-payslips', [PayrollController::class, 'myPayslips']);
