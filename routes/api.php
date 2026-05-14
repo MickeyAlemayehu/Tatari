@@ -7,6 +7,7 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\LeaveManagementController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PerformanceReviewController;
 use Illuminate\Support\Facades\Route;
 
@@ -84,12 +85,17 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/applicants/{applicant}', [ApplicantController::class, 'show']);
         Route::patch('/applicants/{applicant}', [ApplicantController::class, 'update']);
     });
-});
 
-use App\Http\Controllers\PayrollController;
+    Route::get('/payroll/my-payslips', [PayrollController::class, 'myPayslips']);
+    Route::get('/payroll/payslips/{payroll}', [PayrollController::class, 'payslip']);
 
-Route::prefix('payroll')->group(function () {
-    Route::post('/generate', [PayrollController::class, 'generate']);
-    Route::post('/{id}/approve', [PayrollController::class, 'approve']);
-    Route::post('/{id}/reject', [PayrollController::class, 'reject']);
+    Route::middleware('employee.permission:5,manage_payroll')->group(function () {
+        Route::get('/payroll', [PayrollController::class, 'index']);
+        Route::get('/payroll/summary', [PayrollController::class, 'summary']);
+        Route::get('/payroll/period', [PayrollController::class, 'period']);
+        Route::post('/payroll/generate', [PayrollController::class, 'generate']);
+        Route::get('/payroll/{payroll}', [PayrollController::class, 'show']);
+        Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve']);
+        Route::post('/payroll/{payroll}/reject', [PayrollController::class, 'reject']);
+    });
 });

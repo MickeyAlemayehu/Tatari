@@ -9,7 +9,7 @@ class Compensation extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = 'compensation_id';
+    protected $table = 'compensations';
 
     protected $fillable = [
         'employee_id', 'basic_salary', 'housing_allowance',

@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             RecruitmentSeeder::class,
             PerformanceReviewSeeder::class,
             NotificationSeeder::class,
+            PayrollSeeder::class,
         ]);
     }
 }
