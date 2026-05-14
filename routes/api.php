@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ApiAuthController;
+use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\PerformanceReviewController;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +35,12 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
         Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
         Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
+
+        Route::get('/departments', [DepartmentController::class, 'index']);
+        Route::post('/departments', [DepartmentController::class, 'store']);
+        Route::get('/departments/{department}', [DepartmentController::class, 'show']);
+        Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
+        Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
     });
 });
 
