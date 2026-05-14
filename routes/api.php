@@ -1,8 +1,11 @@
 <?php
 
 use App\Http\Controllers\ApiAuthController;
+use App\Http\Controllers\ApplicantController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\JobVacancyController;
+use App\Http\Controllers\LeaveManagementController;
 use App\Http\Controllers\PerformanceReviewController;
 use Illuminate\Support\Facades\Route;
 
@@ -12,9 +15,20 @@ Route::get('/ping', function () {
 
 Route::post('/login', [ApiAuthController::class, 'login']);
 
+Route::get('/public/jobs', [JobVacancyController::class, 'publicIndex']);
+Route::get('/public/jobs/{jobVacancy}', [JobVacancyController::class, 'publicShow']);
+Route::post('/public/jobs/{jobVacancy}/apply', [ApplicantController::class, 'apply']);
+
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me', [ApiAuthController::class, 'me']);
+
+    Route::get('/leave-types', [LeaveManagementController::class, 'types']);
+    Route::get('/leave-requests/my', [LeaveManagementController::class, 'mine']);
+    Route::post('/leave-requests', [LeaveManagementController::class, 'store']);
+    Route::get('/leave-requests/{leaveRequest}', [LeaveManagementController::class, 'show']);
+    Route::post('/leave-requests/{leaveRequest}/cancel', [LeaveManagementController::class, 'cancel']);
+    Route::get('/leave-balances/my', [LeaveManagementController::class, 'myBalances']);
 
     Route::get('/admin/payroll', function () {
         return response()->json(['message' => 'Payroll management API access granted']);
@@ -41,6 +55,26 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/departments/{department}', [DepartmentController::class, 'show']);
         Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
+    });
+
+    Route::middleware('employee.permission:4,approve_leave')->group(function () {
+        Route::get('/leave-summary', [LeaveManagementController::class, 'summary']);
+        Route::get('/leave-requests', [LeaveManagementController::class, 'index']);
+        Route::get('/leave-balances', [LeaveManagementController::class, 'balances']);
+        Route::post('/leave-requests/{leaveRequest}/approve', [LeaveManagementController::class, 'approve']);
+        Route::post('/leave-requests/{leaveRequest}/reject', [LeaveManagementController::class, 'reject']);
+    });
+
+    Route::middleware('employee.permission:4,manage_employees')->group(function () {
+        Route::get('/job-vacancies', [JobVacancyController::class, 'index']);
+        Route::post('/job-vacancies', [JobVacancyController::class, 'store']);
+        Route::get('/job-vacancies/{jobVacancy}', [JobVacancyController::class, 'show']);
+        Route::patch('/job-vacancies/{jobVacancy}', [JobVacancyController::class, 'update']);
+        Route::delete('/job-vacancies/{jobVacancy}', [JobVacancyController::class, 'destroy']);
+
+        Route::get('/applicants', [ApplicantController::class, 'index']);
+        Route::get('/applicants/{applicant}', [ApplicantController::class, 'show']);
+        Route::patch('/applicants/{applicant}', [ApplicantController::class, 'update']);
     });
 });
 
