@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
+import { performanceService, type EvaluationPeriodRecord } from "../../services/performance.service";
+import { ApiError } from "../../lib/api";
+import { formatDate } from "../../lib/utils";
 import {
   Plus,
   Search,
@@ -22,67 +25,35 @@ import {
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 
-interface EvaluationPeriod {
-  id: number;
-  title: string;
-  type: string;
-  startDate: string;
-  endDate: string;
-  status: "active" | "upcoming" | "completed";
-  progress: number;
-  totalEmployees: number;
-  completed: number;
-  pending: number;
-}
-
 export function PerformanceManagement() {
   const navigate = useNavigate();
+  const [evaluationPeriods, setEvaluationPeriods] = useState<EvaluationPeriodRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Company-wide statistics
-  const totalEmployees = 248;
-  const totalEvaluations = 186;
-  const completedEvaluations = 142;
-  const pendingEvaluations = 44;
+  useEffect(() => {
+    performanceService
+      .periods()
+      .then((res) => setEvaluationPeriods(res.data))
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load evaluation periods.")
+      )
+      .finally(() => setLoading(false));
+  }, []);
 
-  // Active evaluation periods
-  const evaluationPeriods: EvaluationPeriod[] = [
-    {
-      id: 1,
-      title: "Q1 2026 Performance Review",
-      type: "Quarterly Review",
-      startDate: "2026-03-01",
-      endDate: "2026-03-31",
-      status: "active",
-      progress: 76,
-      totalEmployees: 248,
-      completed: 189,
-      pending: 59,
-    },
-    {
-      id: 2,
-      title: "Mid-Year Review 2026",
-      type: "Semi-Annual Review",
-      startDate: "2026-06-01",
-      endDate: "2026-06-30",
-      status: "upcoming",
-      progress: 0,
-      totalEmployees: 248,
-      completed: 0,
-      pending: 0,
-    },
-    {
-      id: 3,
-      title: "Annual Performance Review 2025",
-      type: "Annual Review",
-      startDate: "2025-12-01",
-      endDate: "2025-12-31",
-      status: "completed",
-      progress: 100,
-      totalEmployees: 242,
-      completed: 242,
-      pending: 0,
-    },
-  ];
+  const totalEmployees = evaluationPeriods.reduce(
+    (max, p) => Math.max(max, p.totalEmployees ?? 0),
+    0
+  );
+  const totalEvaluations = evaluationPeriods.reduce(
+    (sum, p) => sum + (p.totalEmployees ?? 0),
+    0
+  );
+  const completedEvaluations = evaluationPeriods.reduce(
+    (sum, p) => sum + (p.completed ?? 0),
+    0
+  );
+  const pendingEvaluations = Math.max(0, totalEvaluations - completedEvaluations);
 
   // Quick actions
   const quickActions = [
@@ -120,11 +91,6 @@ export function PerformanceManagement() {
     },
   ];
 
-  const formatDate = (dateStr: string) => {
-    const date = new Date(dateStr);
-    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  };
-
   return (
     <AppLayout>
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -147,6 +113,18 @@ export function PerformanceManagement() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          {error && (
+            <div className="mb-4 rounded-lg border border-[#EF4444]/20 bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+              {error}
+            </div>
+          )}
+          {loading && (
+            <div className="flex justify-center py-16">
+              <div className="w-10 h-10 border-4 border-[#4F46E5] border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {!loading && (
+          <>
           {/* Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             <div className="bg-white rounded-xl p-6 border border-[#E5E7EB]">
@@ -236,7 +214,7 @@ export function PerformanceManagement() {
                   <div className="flex items-start justify-between mb-4">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm text-[#111827]">{period.title}</h3>
+                        <h3 className="text-sm text-[#111827]">{period.title ?? period.name}</h3>
                         <Badge
                           variant={
                             period.status === "active"
@@ -254,7 +232,7 @@ export function PerformanceManagement() {
                             : "Completed"}
                         </Badge>
                       </div>
-                      <p className="text-xs text-[#6B7280]">{period.type}</p>
+                      <p className="text-xs text-[#6B7280] capitalize">{period.status} period</p>
                     </div>
                   </div>
 
@@ -265,19 +243,19 @@ export function PerformanceManagement() {
                     </div>
                     <div className="flex items-center gap-1">
                       <Users className="w-3.5 h-3.5" />
-                      <span>{period.completed}/{period.totalEmployees} completed</span>
+                      <span>{period.completed ?? 0}/{period.totalEmployees ?? 0} completed</span>
                     </div>
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-xs text-[#6B7280]">Progress</span>
-                      <span className="text-xs text-[#111827]">{period.progress}%</span>
+                      <span className="text-xs text-[#111827]">{period.progress ?? 0}%</span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5">
                       <div
                         className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] h-2.5 rounded-full transition-all"
-                        style={{ width: `${period.progress}%` }}
+                        style={{ width: `${period.progress ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -302,6 +280,8 @@ export function PerformanceManagement() {
               ))}
             </div>
           </div>
+          </>
+          )}
         </main>
       </div>
     </AppLayout>

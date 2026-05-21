@@ -1,8 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { CheckCircle, XCircle, Eye, Download, Calendar, Users, DollarSign, AlertCircle, MessageSquare, ArrowLeft } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { AsyncState } from "../components/AsyncState";
+import { payrollService, type PayrollRecord } from "../../services/payroll.service";
+import { ApiError } from "../../lib/api";
 
 interface Comment {
   id: number;
@@ -22,80 +25,106 @@ export function PayrollApproval() {
   const [rejectReason, setRejectReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<"approved" | "rejected" | null>(null);
-
-  // Payroll period data
-  const payrollPeriod = {
-    id: 1,
-    name: "March 2026 - Period 2",
-    startDate: "2026-03-16",
-    endDate: "2026-03-31",
-    payDate: "2026-04-05",
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [payrollRows, setPayrollRows] = useState<PayrollRecord[]>([]);
+  const [payrollPeriod, setPayrollPeriod] = useState({
+    id: 0,
+    name: "",
+    startDate: "",
+    endDate: "",
+    payDate: "",
     status: "pending_approval",
     submittedBy: "HR Department",
-    submittedDate: "2026-03-21",
-  };
+    submittedDate: "",
+  });
 
-  // Summary data
-  const summary = {
-    totalEmployees: 6,
-    totalGrossPay: 54040,
-    totalDeductions: 8400,
-    totalNetPay: 45640,
-    departments: [
-      { name: "Engineering", employees: 2, amount: 15175 },
-      { name: "Marketing", employees: 1, amount: 7425 },
-      { name: "Sales", employees: 1, amount: 9400 },
-      { name: "HR", employees: 1, amount: 6940 },
-      { name: "Finance", employees: 1, amount: 7700 },
-    ],
-  };
+  const [comments] = useState<Comment[]>([]);
 
-  // Comments history
-  const [comments] = useState<Comment[]>([
-    {
-      id: 1,
-      author: "Sarah Johnson",
-      role: "HR Manager",
-      date: "2026-03-21 09:30 AM",
-      message: "Payroll for March Period 2 has been prepared and submitted for approval. All employee data has been verified and calculations are accurate.",
-      type: "comment",
-    },
-    {
-      id: 2,
-      author: "Michael Chen",
-      role: "Finance Officer",
-      date: "2026-03-21 11:15 AM",
-      message: "Reviewed the deductions and they align with the tax brackets and insurance policies. Everything looks good from finance perspective.",
-      type: "comment",
-    },
-  ]);
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    payrollService
+      .get(Number(id))
+      .then(async (row) => {
+        const period = await payrollService.period(row.year, row.month);
+        const rows = period.employees ?? [];
+        setPayrollRows(rows);
+        setPayrollPeriod({
+          id: period.id ?? Number(id),
+          name: period.name,
+          startDate: period.startDate ?? "",
+          endDate: period.endDate ?? "",
+          payDate: period.payDate ?? "",
+          status: period.status,
+          submittedBy: "HR Department",
+          submittedDate: new Date().toISOString().slice(0, 10),
+        });
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load payroll for approval.")
+      )
+      .finally(() => setLoading(false));
+  }, [id]);
 
-  // Handle approve
-  const handleApprove = () => {
+  const summary = useMemo(() => {
+    const deptMap = new Map<string, { name: string; employees: number; amount: number }>();
+    let totalGrossPay = 0;
+    let totalDeductions = 0;
+    let totalNetPay = 0;
+    for (const r of payrollRows) {
+      const dept = r.employee?.department ?? r.department ?? "Other";
+      const net = r.netPay ?? r.net_salary ?? 0;
+      const gross = r.grossPay ?? 0;
+      const ded = r.totalDeductions ?? 0;
+      totalGrossPay += gross;
+      totalDeductions += ded;
+      totalNetPay += net;
+      const existing = deptMap.get(dept) ?? { name: dept, employees: 0, amount: 0 };
+      existing.employees += 1;
+      existing.amount += net;
+      deptMap.set(dept, existing);
+    }
+    return {
+      totalEmployees: payrollRows.length,
+      totalGrossPay,
+      totalDeductions,
+      totalNetPay,
+      departments: Array.from(deptMap.values()),
+    };
+  }, [payrollRows]);
+
+  const handleApprove = async () => {
+    if (!payrollRows.length) return;
     setIsProcessing(true);
-    
-    // Simulate approval process
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      await Promise.all(payrollRows.map((r) => payrollService.approve(r.id)));
       setApprovalStatus("approved");
-    }, 1500);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to approve payroll.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
-  // Handle reject
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!rejectReason.trim()) {
       alert("Please provide a reason for rejection");
       return;
     }
-
+    if (!payrollRows.length) return;
     setIsProcessing(true);
-    
-    // Simulate rejection process
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      await Promise.all(
+        payrollRows.map((r) => payrollService.reject(r.id, rejectReason.trim()))
+      );
       setApprovalStatus("rejected");
       setShowRejectModal(false);
-    }, 1500);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to reject payroll.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Add comment

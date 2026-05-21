@@ -1,20 +1,18 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useCallback, useEffect, useState } from "react";
 import { Plus, Edit, Trash2, X, Save, Building2 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { AsyncState } from "../components/AsyncState";
+import { departmentsService, type DepartmentRecord } from "../../services/departments.service";
+import { ApiError } from "../../lib/api";
 
-interface Department {
-  id: number;
-  name: string;
-  description: string;
-  employeeCount: number;
-  manager: string;
-}
+type Department = DepartmentRecord;
 
 export function DepartmentManagement() {
-  const navigate = useNavigate();
   const [showModal, setShowModal] = useState(false);
   const [editingDepartment, setEditingDepartment] = useState<Department | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
@@ -25,72 +23,32 @@ export function DepartmentManagement() {
     description: "",
   });
 
-  const [departments, setDepartments] = useState<Department[]>([
-    {
-      id: 1,
-      name: "Engineering",
-      description: "Software development and technical operations",
-      employeeCount: 45,
-      manager: "Sarah Johnson",
-    },
-    {
-      id: 2,
-      name: "Product",
-      description: "Product strategy and management",
-      employeeCount: 12,
-      manager: "Michael Chen",
-    },
-    {
-      id: 3,
-      name: "Design",
-      description: "User experience and visual design",
-      employeeCount: 8,
-      manager: "Emily Davis",
-    },
-    {
-      id: 4,
-      name: "Human Resources",
-      description: "Employee relations and talent management",
-      employeeCount: 5,
-      manager: "James Wilson",
-    },
-    {
-      id: 5,
-      name: "Marketing",
-      description: "Brand marketing and communications",
-      employeeCount: 15,
-      manager: "Lisa Anderson",
-    },
-    {
-      id: 6,
-      name: "Sales",
-      description: "Sales and business development",
-      employeeCount: 20,
-      manager: "Jessica Lee",
-    },
-    {
-      id: 7,
-      name: "Finance",
-      description: "Financial planning and analysis",
-      employeeCount: 7,
-      manager: "Amanda White",
-    },
-    {
-      id: 8,
-      name: "Operations",
-      description: "Business operations and logistics",
-      employeeCount: 10,
-      manager: "David Martinez",
-    },
-  ]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await departmentsService.list();
+      setDepartments(res.data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load departments.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const handleOpenModal = (department?: Department) => {
     if (department) {
       setEditingDepartment(department);
       setFormData({
         name: department.name,
-        description: department.description,
-        manager: department.manager,
+        description: department.description ?? "",
+        manager: department.manager ?? "",
       });
     } else {
       setEditingDepartment(null);
@@ -135,45 +93,39 @@ export function DepartmentManagement() {
     return isValid;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm()) return;
 
-    if (!validateForm()) {
-      return;
+    setSaving(true);
+    try {
+      if (editingDepartment) {
+        await departmentsService.update(editingDepartment.id, {
+          name: formData.name,
+          description: formData.description,
+        });
+      } else {
+        await departmentsService.create({
+          name: formData.name,
+          description: formData.description,
+        });
+      }
+      await load();
+      handleCloseModal();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to save department.");
+    } finally {
+      setSaving(false);
     }
-
-    if (editingDepartment) {
-      // Update existing department
-      setDepartments(
-        departments.map((dept) =>
-          dept.id === editingDepartment.id
-            ? {
-                ...dept,
-                name: formData.name,
-                description: formData.description,
-                manager: formData.manager,
-              }
-            : dept
-        )
-      );
-    } else {
-      // Add new department
-      const newDepartment: Department = {
-        id: Math.max(...departments.map((d) => d.id)) + 1,
-        name: formData.name,
-        description: formData.description,
-        employeeCount: 0,
-        manager: formData.manager,
-      };
-      setDepartments([...departments, newDepartment]);
-    }
-
-    handleCloseModal();
   };
 
-  const handleDelete = (id: number, name: string) => {
-    if (confirm(`Are you sure you want to delete ${name} department?`)) {
-      setDepartments(departments.filter((dept) => dept.id !== id));
+  const handleDelete = async (id: number, name: string) => {
+    if (!confirm(`Are you sure you want to delete ${name} department?`)) return;
+    try {
+      await departmentsService.remove(id);
+      await load();
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to delete department.");
     }
   };
 
@@ -202,8 +154,8 @@ export function DepartmentManagement() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          <AsyncState loading={loading} error={error} empty={!loading && departments.length === 0}>
           <div className="bg-white rounded-xl border border-[#E5E7EB]">
-            {/* Table */}
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
@@ -280,6 +232,7 @@ export function DepartmentManagement() {
               </p>
             </div>
           </div>
+          </AsyncState>
         </main>
       </div>
 
@@ -381,7 +334,7 @@ export function DepartmentManagement() {
                   className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg"
                 >
                   <Save className="w-5 h-5" />
-                  <span>{editingDepartment ? "Update" : "Create"}</span>
+                  <span>{saving ? "Saving..." : editingDepartment ? "Update" : "Create"}</span>
                 </button>
               </div>
             </form>

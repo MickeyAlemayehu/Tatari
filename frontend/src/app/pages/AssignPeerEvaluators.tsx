@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Save, Users, CheckCircle, X, AlertCircle, Search, UserPlus } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { employeesService } from "../../services/employees.service";
+import { performanceService } from "../../services/performance.service";
+import { ApiError } from "../../lib/api";
+import { initials } from "../../lib/utils";
 
 interface Employee {
   id: number;
@@ -32,21 +36,27 @@ export function AssignPeerEvaluators() {
     peers: "",
   });
 
-  // All employees
-  const employees: Employee[] = [
-    { id: 1, name: "Sarah Johnson", position: "Marketing Specialist", department: "Marketing", avatar: "SJ" },
-    { id: 2, name: "Michael Chen", position: "Senior Developer", department: "Engineering", avatar: "MC" },
-    { id: 3, name: "Emily Davis", position: "Product Designer", department: "Design", avatar: "ED" },
-    { id: 4, name: "James Wilson", position: "Sales Manager", department: "Sales", avatar: "JW" },
-    { id: 5, name: "Lisa Anderson", position: "HR Coordinator", department: "Human Resources", avatar: "LA" },
-    { id: 6, name: "David Martinez", position: "Backend Developer", department: "Engineering", avatar: "DM" },
-    { id: 7, name: "Jennifer Taylor", position: "Content Writer", department: "Marketing", avatar: "JT" },
-    { id: 8, name: "Robert Brown", position: "Product Manager", department: "Product", avatar: "RB" },
-    { id: 9, name: "Amanda White", position: "UI Designer", department: "Design", avatar: "AW" },
-    { id: 10, name: "Chris Taylor", position: "Frontend Developer", department: "Engineering", avatar: "CT" },
-    { id: 11, name: "Michelle Chen", position: "Marketing Manager", department: "Marketing", avatar: "MC" },
-    { id: 12, name: "Alex Johnson", position: "Sales Representative", department: "Sales", avatar: "AJ" },
-  ];
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [periodId, setPeriodId] = useState<number | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    employeesService.list({ per_page: 100 }).then((res) => {
+      setEmployees(
+        res.data.map((e) => ({
+          id: e.id,
+          name: `${e.first_name} ${e.last_name}`,
+          position: e.position ?? "—",
+          department: e.department?.name ?? "—",
+          avatar: initials(e.first_name, e.last_name),
+        }))
+      );
+    }).catch(() => {});
+    performanceService.periods().then((res) => {
+      const active = res.data.find((p) => p.status === "active") ?? res.data[0];
+      if (active) setPeriodId(active.id);
+    }).catch(() => {});
+  }, []);
 
   // Available peers (exclude selected employee)
   const availablePeers = employees.filter(emp => emp.id !== selectedEmployee?.id);
@@ -127,24 +137,26 @@ export function AssignPeerEvaluators() {
       return;
     }
 
+    if (!selectedEmployee || !periodId) {
+      setSubmitError(periodId ? "Select an employee." : "No active evaluation period found.");
+      return;
+    }
+
     setIsSubmitting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    setIsSubmitting(false);
-    setShowSuccess(true);
-
-    // Log assignment data
-    console.log("Peer Assignment:", {
-      employee: selectedEmployee,
-      peers: selectedPeers.map(id => employees.find(e => e.id === id)),
-    });
-
-    // Show success and redirect
-    setTimeout(() => {
-      navigate("/performance");
-    }, 2000);
+    setSubmitError(null);
+    try {
+      await performanceService.assignPeers({
+        evaluation_period_id: periodId,
+        employee_id: selectedEmployee.id,
+        peer_ids: selectedPeers,
+      });
+      setShowSuccess(true);
+      setTimeout(() => navigate("/performance"), 1500);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Failed to assign peer evaluators.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Get selected peer objects

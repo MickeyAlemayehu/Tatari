@@ -1,20 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Calendar, TrendingUp, AlertCircle, History, Plus, Download } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { leaveService, type LeaveBalanceRecord } from "../../services/leave.service";
+import { mapMyHistoryItem, type EmployeeLeaveHistoryItem } from "../../lib/leave-mappers";
+import { ApiError } from "../../lib/api";
+import { AsyncState } from "../components/AsyncState";
 
-interface LeaveHistory {
-  id: number;
-  type: string;
-  startDate: string;
-  endDate: string;
-  days: number;
-  status: "pending" | "approved" | "rejected";
-  appliedDate: string;
-}
+const BALANCE_COLORS = [
+  "from-[#06B6D4] to-[#06B6D4]",
+  "from-[#EF4444] to-[#EF4444]",
+  "from-[#4F46E5] to-[#4338CA]",
+  "from-[#F59E0B] to-[#F59E0B]",
+];
 
-interface LeaveBalance {
+interface LeaveBalanceView {
   type: string;
   total: number;
   used: number;
@@ -24,110 +25,34 @@ interface LeaveBalance {
 
 export function LeaveBalance() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalanceView[]>([]);
+  const [leaveHistory, setLeaveHistory] = useState<EmployeeLeaveHistoryItem[]>([]);
 
-  // Overall leave summary
-  const totalLeave = 30;
-  const usedLeave = 12;
-  const remainingLeave = 18;
+  useEffect(() => {
+    Promise.all([leaveService.myBalances(), leaveService.myRequests({ per_page: 50 })])
+      .then(([balancesRes, requestsRes]) => {
+        setLeaveBalances(
+          balancesRes.data.map((b: LeaveBalanceRecord, i: number) => ({
+            type: b.type ?? "Leave",
+            total: b.total,
+            used: b.used,
+            remaining: b.remaining,
+            color: BALANCE_COLORS[i % BALANCE_COLORS.length],
+          }))
+        );
+        setLeaveHistory(requestsRes.data.map(mapMyHistoryItem));
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load leave balance.")
+      )
+      .finally(() => setLoading(false));
+  }, []);
 
-  // Leave balances by type
-  const leaveBalances: LeaveBalance[] = [
-    {
-      type: "Annual Leave",
-      total: 20,
-      used: 8,
-      remaining: 12,
-      color: "from-[#06B6D4] to-[#06B6D4]",
-    },
-    {
-      type: "Sick Leave",
-      total: 10,
-      used: 3,
-      remaining: 7,
-      color: "from-[#EF4444] to-[#EF4444]",
-    },
-    {
-      type: "Personal Leave",
-      total: 5,
-      used: 1,
-      remaining: 4,
-      color: "from-[#4F46E5] to-[#4338CA]",
-    },
-    {
-      type: "Maternity/Paternity",
-      total: 90,
-      used: 0,
-      remaining: 90,
-      color: "from-[#F59E0B] to-[#F59E0B]",
-    },
-  ];
-
-  // Recent leave history
-  const leaveHistory: LeaveHistory[] = [
-    {
-      id: 1,
-      type: "Annual Leave",
-      startDate: "2026-04-15",
-      endDate: "2026-04-19",
-      days: 5,
-      status: "approved",
-      appliedDate: "2026-03-10",
-    },
-    {
-      id: 2,
-      type: "Sick Leave",
-      startDate: "2026-03-25",
-      endDate: "2026-03-26",
-      days: 2,
-      status: "approved",
-      appliedDate: "2026-03-24",
-    },
-    {
-      id: 3,
-      type: "Personal Leave",
-      startDate: "2026-04-01",
-      endDate: "2026-04-03",
-      days: 3,
-      status: "pending",
-      appliedDate: "2026-03-20",
-    },
-    {
-      id: 4,
-      type: "Annual Leave",
-      startDate: "2026-03-15",
-      endDate: "2026-03-16",
-      days: 2,
-      status: "approved",
-      appliedDate: "2026-03-05",
-    },
-    {
-      id: 5,
-      type: "Sick Leave",
-      startDate: "2026-02-20",
-      endDate: "2026-02-20",
-      days: 1,
-      status: "approved",
-      appliedDate: "2026-02-19",
-    },
-    {
-      id: 6,
-      type: "Annual Leave",
-      startDate: "2026-02-10",
-      endDate: "2026-02-11",
-      days: 2,
-      status: "approved",
-      appliedDate: "2026-01-28",
-    },
-    {
-      id: 7,
-      type: "Annual Leave",
-      startDate: "2026-01-15",
-      endDate: "2026-01-17",
-      days: 3,
-      status: "approved",
-      appliedDate: "2026-01-05",
-    },
-  ];
+  const totalLeave = leaveBalances.reduce((s, b) => s + b.total, 0);
+  const usedLeave = leaveBalances.reduce((s, b) => s + b.used, 0);
+  const remainingLeave = leaveBalances.reduce((s, b) => s + b.remaining, 0);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -170,6 +95,7 @@ export function LeaveBalance() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          <AsyncState loading={loading} error={error}>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             {/* Total Leave */}
@@ -376,6 +302,7 @@ export function LeaveBalance() {
               days may be carried forward to the next year based on company policy (maximum 5 days).
             </p>
           </div>
+          </AsyncState>
         </main>
       </div>
     </AppLayout>

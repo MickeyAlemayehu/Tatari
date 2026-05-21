@@ -1,296 +1,149 @@
-import { useState } from "react";
-import { User, Mail, Phone, MapPin, Calendar, Briefcase, Save, Edit2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { User, Mail, Briefcase, Save, Edit2 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { useAuth } from "../../contexts/AuthContext";
+import { employeesService } from "../../services/employees.service";
+import { ApiError } from "../../lib/api";
+import { formatDate, initials } from "../../lib/utils";
 
 export function MyProfile() {
+  const { employee, refreshUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState({
-    firstName: "John",
-    lastName: "Doe",
-    email: "john.doe@company.com",
-    phone: "+1 (555) 123-4567",
-    dateOfBirth: "1990-05-15",
-    address: "123 Main Street",
-    city: "San Francisco",
-    state: "CA",
-    zipCode: "94102",
-    position: "Senior Developer",
-    department: "Engineering",
-    employeeId: "EMP-2024-001",
-    joinDate: "2022-01-15",
+    firstName: "",
+    lastName: "",
+    email: "",
+    position: "",
+    department: "",
+    employeeId: "",
+    joinDate: "",
   });
 
-  const handleSave = () => {
-    setIsEditing(false);
-    // In a real app, this would save to the backend
-    console.log("Profile updated:", profile);
+  useEffect(() => {
+    if (!employee) return;
+    setProfile({
+      firstName: employee.first_name,
+      lastName: employee.last_name,
+      email: employee.email,
+      position: employee.position ?? "—",
+      department: employee.department?.name ?? "—",
+      employeeId: `EMP-${String(employee.id).padStart(3, "0")}`,
+      joinDate: formatDate((employee as { created_at?: string }).created_at),
+    });
+  }, [employee]);
+
+  const handleSave = async () => {
+    if (!employee) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await employeesService.update(employee.id, {
+        first_name: profile.firstName,
+        last_name: profile.lastName,
+        email: profile.email,
+        position: profile.position,
+      });
+      await refreshUser();
+      setIsEditing(false);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to update profile.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  if (!employee) {
+    return (
+      <AppLayout title="My Profile" subtitle="Manage your personal information">
+        <p className="p-6 text-sm text-[#6B7280]">Please sign in to view your profile.</p>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout title="My Profile" subtitle="Manage your personal information">
       <div className="p-6">
         <div className="max-w-4xl mx-auto">
-          {/* Header Card */}
+          {error && (
+            <div className="mb-4 rounded-lg border border-[#EF4444]/20 bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+              {error}
+            </div>
+          )}
           <div className="bg-white rounded-xl border border-[#E5E7EB] mb-6">
             <div className="p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-4">
-                  {/* Avatar */}
                   <div className="w-20 h-20 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center text-white text-2xl">
-                    {profile.firstName[0]}{profile.lastName[0]}
+                    {initials(profile.firstName, profile.lastName)}
                   </div>
                   <div>
                     <h2 className="text-2xl text-[#111827] mb-1">
                       {profile.firstName} {profile.lastName}
                     </h2>
                     <p className="text-[#6B7280]">{profile.position}</p>
-                    <p className="text-sm text-[#6B7280]">
-                      Employee ID: {profile.employeeId}
-                    </p>
+                    <p className="text-sm text-[#6B7280]">Employee ID: {profile.employeeId}</p>
                   </div>
                 </div>
                 <button
                   onClick={() => (isEditing ? handleSave() : setIsEditing(true))}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition ${
-                    isEditing
-                      ? "bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white"
-                      : "border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
-                  }`}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2 bg-[#4F46E5] text-white rounded-lg text-sm disabled:opacity-60"
                 >
-                  {isEditing ? (
-                    <>
-                      <Save className="w-4 h-4" />
-                      <span>Save Changes</span>
-                    </>
-                  ) : (
-                    <>
-                      <Edit2 className="w-4 h-4" />
-                      <span>Edit Profile</span>
-                    </>
-                  )}
+                  {isEditing ? <Save className="w-4 h-4" /> : <Edit2 className="w-4 h-4" />}
+                  {saving ? "Saving..." : isEditing ? "Save" : "Edit"}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Personal Information */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB] mb-6">
-            <div className="px-6 py-4 border-b border-[#E5E7EB]">
-              <h3 className="text-[#111827]">Personal Information</h3>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <label className="block">
+                <span className="text-sm text-[#6B7280]">First name</span>
+                <input
+                  disabled={!isEditing}
+                  value={profile.firstName}
+                  onChange={(e) => setProfile({ ...profile, firstName: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-[#E5E7EB] rounded-lg disabled:bg-[#F9FAFB]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm text-[#6B7280]">Last name</span>
+                <input
+                  disabled={!isEditing}
+                  value={profile.lastName}
+                  onChange={(e) => setProfile({ ...profile, lastName: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-[#E5E7EB] rounded-lg disabled:bg-[#F9FAFB]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm text-[#6B7280] flex items-center gap-1">
+                  <Mail className="w-3 h-3" /> Email
+                </span>
+                <input
+                  disabled={!isEditing}
+                  value={profile.email}
+                  onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-[#E5E7EB] rounded-lg disabled:bg-[#F9FAFB]"
+                />
+              </label>
+              <label className="block">
+                <span className="text-sm text-[#6B7280] flex items-center gap-1">
+                  <Briefcase className="w-3 h-3" /> Position
+                </span>
+                <input
+                  disabled={!isEditing}
+                  value={profile.position}
+                  onChange={(e) => setProfile({ ...profile, position: e.target.value })}
+                  className="mt-1 w-full px-3 py-2 border border-[#E5E7EB] rounded-lg disabled:bg-[#F9FAFB]"
+                />
+              </label>
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* First Name */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">First Name</label>
-                  <div className="flex items-center gap-3">
-                    <User className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="text"
-                      value={profile.firstName}
-                      onChange={(e) =>
-                        setProfile({ ...profile, firstName: e.target.value })
-                      }
-                      disabled={!isEditing}
-                      className={`flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                        isEditing
-                          ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                          : "bg-[#F9FAFB]"
-                      } focus:outline-none transition`}
-                    />
-                  </div>
-                </div>
-
-                {/* Last Name */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">Last Name</label>
-                  <div className="flex items-center gap-3">
-                    <User className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="text"
-                      value={profile.lastName}
-                      onChange={(e) =>
-                        setProfile({ ...profile, lastName: e.target.value })
-                      }
-                      disabled={!isEditing}
-                      className={`flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                        isEditing
-                          ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                          : "bg-[#F9FAFB]"
-                      } focus:outline-none transition`}
-                    />
-                  </div>
-                </div>
-
-                {/* Email */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">Email</label>
-                  <div className="flex items-center gap-3">
-                    <Mail className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="email"
-                      value={profile.email}
-                      onChange={(e) => setProfile({ ...profile, email: e.target.value })}
-                      disabled={!isEditing}
-                      className={`flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                        isEditing
-                          ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                          : "bg-[#F9FAFB]"
-                      } focus:outline-none transition`}
-                    />
-                  </div>
-                </div>
-
-                {/* Phone */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">Phone</label>
-                  <div className="flex items-center gap-3">
-                    <Phone className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="tel"
-                      value={profile.phone}
-                      onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
-                      disabled={!isEditing}
-                      className={`flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                        isEditing
-                          ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                          : "bg-[#F9FAFB]"
-                      } focus:outline-none transition`}
-                    />
-                  </div>
-                </div>
-
-                {/* Date of Birth */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">Date of Birth</label>
-                  <div className="flex items-center gap-3">
-                    <Calendar className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="date"
-                      value={profile.dateOfBirth}
-                      onChange={(e) =>
-                        setProfile({ ...profile, dateOfBirth: e.target.value })
-                      }
-                      disabled={!isEditing}
-                      className={`flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                        isEditing
-                          ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                          : "bg-[#F9FAFB]"
-                      } focus:outline-none transition`}
-                    />
-                  </div>
-                </div>
-
-                {/* Address */}
-                <div className="md:col-span-2">
-                  <label className="block text-sm text-[#6B7280] mb-2">Address</label>
-                  <div className="flex items-center gap-3">
-                    <MapPin className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="text"
-                      value={profile.address}
-                      onChange={(e) => setProfile({ ...profile, address: e.target.value })}
-                      disabled={!isEditing}
-                      className={`flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                        isEditing
-                          ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                          : "bg-[#F9FAFB]"
-                      } focus:outline-none transition`}
-                    />
-                  </div>
-                </div>
-
-                {/* City */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">City</label>
-                  <input
-                    type="text"
-                    value={profile.city}
-                    onChange={(e) => setProfile({ ...profile, city: e.target.value })}
-                    disabled={!isEditing}
-                    className={`w-full px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                      isEditing
-                        ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                        : "bg-[#F9FAFB]"
-                    } focus:outline-none transition`}
-                  />
-                </div>
-
-                {/* State */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">State</label>
-                  <input
-                    type="text"
-                    value={profile.state}
-                    onChange={(e) => setProfile({ ...profile, state: e.target.value })}
-                    disabled={!isEditing}
-                    className={`w-full px-4 py-2.5 border border-[#E5E7EB] rounded-lg ${
-                      isEditing
-                        ? "bg-white focus:ring-2 focus:ring-[#4F46E5]"
-                        : "bg-[#F9FAFB]"
-                    } focus:outline-none transition`}
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Employment Information */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB]">
-            <div className="px-6 py-4 border-b border-[#E5E7EB]">
-              <h3 className="text-[#111827]">Employment Information</h3>
-            </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Position */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">Position</label>
-                  <div className="flex items-center gap-3">
-                    <Briefcase className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="text"
-                      value={profile.position}
-                      disabled
-                      className="flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg bg-[#F9FAFB] text-[#6B7280]"
-                    />
-                  </div>
-                </div>
-
-                {/* Department */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">Department</label>
-                  <div className="flex items-center gap-3">
-                    <Briefcase className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="text"
-                      value={profile.department}
-                      disabled
-                      className="flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg bg-[#F9FAFB] text-[#6B7280]"
-                    />
-                  </div>
-                </div>
-
-                {/* Join Date */}
-                <div>
-                  <label className="block text-sm text-[#6B7280] mb-2">Join Date</label>
-                  <div className="flex items-center gap-3">
-                    <Calendar className="w-5 h-5 text-[#6B7280]" />
-                    <input
-                      type="date"
-                      value={profile.joinDate}
-                      disabled
-                      className="flex-1 px-4 py-2.5 border border-[#E5E7EB] rounded-lg bg-[#F9FAFB] text-[#6B7280]"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-4 p-3 bg-[#ECFEFF] border border-[#06B6D4]/20 rounded-lg">
-                <p className="text-sm text-[#06B6D4]">
-                  <strong>Note:</strong> Employment information can only be updated by HR.
-                </p>
-              </div>
-            </div>
+            <p className="text-sm text-[#6B7280]">
+              Department: {profile.department} · Joined {profile.joinDate}
+            </p>
           </div>
         </div>
       </div>

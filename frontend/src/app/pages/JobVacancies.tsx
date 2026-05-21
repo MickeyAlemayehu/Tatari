@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Plus, Search, Filter, Eye, Edit, Trash2, MapPin, Briefcase, Clock, Users } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { jobsService, type JobRecord } from "../../services/jobs.service";
+import { ApiError } from "../../lib/api";
 
 interface Job {
   id: number;
@@ -24,105 +26,32 @@ export function JobVacancies() {
   const [filterDepartment, setFilterDepartment] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
 
-  // Job listings
-  const [jobs] = useState<Job[]>([
-    {
-      id: 1,
-      title: "Senior Software Engineer",
-      department: "Engineering",
-      location: "San Francisco, CA",
-      type: "Full-time",
-      status: "open",
-      applicants: 24,
-      postedDate: "2026-03-01",
-      closingDate: "2026-04-15",
-      salary: "$120k - $160k",
-    },
-    {
-      id: 2,
-      title: "Product Designer",
-      department: "Design",
-      location: "Remote",
-      type: "Full-time",
-      status: "open",
-      applicants: 18,
-      postedDate: "2026-03-05",
-      closingDate: "2026-04-20",
-      salary: "$90k - $120k",
-    },
-    {
-      id: 3,
-      title: "Marketing Manager",
-      department: "Marketing",
-      location: "New York, NY",
-      type: "Full-time",
-      status: "open",
-      applicants: 31,
-      postedDate: "2026-02-28",
-      closingDate: "2026-04-10",
-      salary: "$100k - $130k",
-    },
-    {
-      id: 4,
-      title: "HR Coordinator",
-      department: "Human Resources",
-      location: "San Francisco, CA",
-      type: "Full-time",
-      status: "on-hold",
-      applicants: 12,
-      postedDate: "2026-02-20",
-      closingDate: "2026-04-05",
-      salary: "$60k - $75k",
-    },
-    {
-      id: 5,
-      title: "Data Analyst",
-      department: "Engineering",
-      location: "Remote",
-      type: "Full-time",
-      status: "open",
-      applicants: 42,
-      postedDate: "2026-03-10",
-      closingDate: "2026-04-25",
-      salary: "$80k - $110k",
-    },
-    {
-      id: 6,
-      title: "Content Writer",
-      department: "Marketing",
-      location: "Remote",
-      type: "Contract",
-      status: "closed",
-      applicants: 56,
-      postedDate: "2026-02-15",
-      closingDate: "2026-03-15",
-      salary: "$50k - $65k",
-    },
-    {
-      id: 7,
-      title: "Sales Representative",
-      department: "Sales",
-      location: "Los Angeles, CA",
-      type: "Full-time",
-      status: "open",
-      applicants: 19,
-      postedDate: "2026-03-08",
-      closingDate: "2026-04-18",
-      salary: "$70k - $90k",
-    },
-    {
-      id: 8,
-      title: "UX Research Intern",
-      department: "Design",
-      location: "San Francisco, CA",
-      type: "Internship",
-      status: "draft",
-      applicants: 0,
-      postedDate: "2026-03-15",
-      closingDate: "2026-05-01",
-      salary: "$25/hour",
-    },
-  ]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    jobsService
+      .list({ per_page: 100 })
+      .then((res) =>
+        setJobs(
+          res.data.map((j: JobRecord) => ({
+            id: j.id,
+            title: j.title,
+            department: j.department ?? "—",
+            location: j.location ?? "—",
+            type: (j.type as Job["type"]) ?? "Full-time",
+            status: (j.status as Job["status"]) ?? "open",
+            applicants: j.applicants ?? 0,
+            postedDate: j.postedDate ?? "",
+            closingDate: j.closingDate ?? "",
+            salary: j.salary ?? "—",
+          }))
+        )
+      )
+      .catch((err) =>
+        setLoadError(err instanceof ApiError ? err.message : "Failed to load jobs.")
+      );
+  }, []);
 
   // Get unique departments
   const departments = Array.from(new Set(jobs.map(job => job.department)));

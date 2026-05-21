@@ -1,8 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Search, Filter, Eye, Download, Star, Mail, Phone, Clock, Briefcase, Users, CheckCircle, XCircle, TrendingUp, Calendar, MessageSquare, MoreVertical } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { applicantsService, type ApplicantRecord } from "../../services/applicants.service";
+import { initials } from "../../lib/utils";
 
 interface Applicant {
   id: number;
@@ -29,157 +31,33 @@ export function ApplicantManagement() {
   const [showFilters, setShowFilters] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<number[]>([]);
 
-  // Applicants data
-  const [applicants] = useState<Applicant[]>([
-    {
-      id: 1,
-      name: "Alex Martinez",
-      email: "alex.martinez@email.com",
-      phone: "+1 (555) 123-4567",
-      jobTitle: "Senior Software Engineer",
-      jobId: 1,
-      department: "Engineering",
-      appliedDate: "2026-03-18",
-      status: "shortlisted",
-      experience: "7 years",
-      location: "San Francisco, CA",
-      avatar: "AM",
-      rating: 4.5,
-    },
-    {
-      id: 2,
-      name: "Sarah Chen",
-      email: "sarah.chen@email.com",
-      phone: "+1 (555) 234-5678",
-      jobTitle: "Senior Software Engineer",
-      jobId: 1,
-      department: "Engineering",
-      appliedDate: "2026-03-17",
-      status: "reviewing",
-      experience: "6 years",
-      location: "Remote",
-      avatar: "SC",
-      rating: 4.0,
-    },
-    {
-      id: 3,
-      name: "Michael Rodriguez",
-      email: "m.rodriguez@email.com",
-      phone: "+1 (555) 345-6789",
-      jobTitle: "Product Designer",
-      jobId: 2,
-      department: "Design",
-      appliedDate: "2026-03-16",
-      status: "shortlisted",
-      experience: "8 years",
-      location: "New York, NY",
-      avatar: "MR",
-      rating: 5.0,
-    },
-    {
-      id: 4,
-      name: "Emily Thompson",
-      email: "emily.t@email.com",
-      phone: "+1 (555) 456-7890",
-      jobTitle: "Marketing Manager",
-      jobId: 3,
-      department: "Marketing",
-      appliedDate: "2026-03-15",
-      status: "new",
-      experience: "5 years",
-      location: "Los Angeles, CA",
-      avatar: "ET",
-    },
-    {
-      id: 5,
-      name: "David Kim",
-      email: "david.kim@email.com",
-      phone: "+1 (555) 567-8901",
-      jobTitle: "Senior Software Engineer",
-      jobId: 1,
-      department: "Engineering",
-      appliedDate: "2026-03-14",
-      status: "rejected",
-      experience: "3 years",
-      location: "Austin, TX",
-      avatar: "DK",
-      rating: 2.5,
-    },
-    {
-      id: 6,
-      name: "Jessica Park",
-      email: "jessica.park@email.com",
-      phone: "+1 (555) 678-9012",
-      jobTitle: "Product Designer",
-      jobId: 2,
-      department: "Design",
-      appliedDate: "2026-03-13",
-      status: "hired",
-      experience: "6 years",
-      location: "Remote",
-      avatar: "JP",
-      rating: 4.8,
-    },
-    {
-      id: 7,
-      name: "Robert Johnson",
-      email: "robert.j@email.com",
-      phone: "+1 (555) 789-0123",
-      jobTitle: "Data Analyst",
-      jobId: 5,
-      department: "Engineering",
-      appliedDate: "2026-03-12",
-      status: "reviewing",
-      experience: "4 years",
-      location: "Seattle, WA",
-      avatar: "RJ",
-      rating: 3.8,
-    },
-    {
-      id: 8,
-      name: "Amanda Wilson",
-      email: "amanda.w@email.com",
-      phone: "+1 (555) 890-1234",
-      jobTitle: "Marketing Manager",
-      jobId: 3,
-      department: "Marketing",
-      appliedDate: "2026-03-11",
-      status: "new",
-      experience: "7 years",
-      location: "Chicago, IL",
-      avatar: "AW",
-    },
-    {
-      id: 9,
-      name: "Christopher Lee",
-      email: "chris.lee@email.com",
-      phone: "+1 (555) 901-2345",
-      jobTitle: "Sales Representative",
-      jobId: 7,
-      department: "Sales",
-      appliedDate: "2026-03-10",
-      status: "shortlisted",
-      experience: "5 years",
-      location: "Miami, FL",
-      avatar: "CL",
-      rating: 4.2,
-    },
-    {
-      id: 10,
-      name: "Maria Garcia",
-      email: "maria.garcia@email.com",
-      phone: "+1 (555) 012-3456",
-      jobTitle: "HR Coordinator",
-      jobId: 4,
-      department: "Human Resources",
-      appliedDate: "2026-03-09",
-      status: "reviewing",
-      experience: "3 years",
-      location: "San Francisco, CA",
-      avatar: "MG",
-      rating: 3.5,
-    },
-  ]);
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
+
+  useEffect(() => {
+    applicantsService.list({ per_page: 100 }).then((res) =>
+      setApplicants(
+        res.data.map((a: ApplicantRecord) => ({
+          id: a.id,
+          name: a.name,
+          email: a.email,
+          phone: a.phone ?? "",
+          jobTitle: a.jobTitle ?? "—",
+          jobId: a.jobId ?? 0,
+          department: a.department ?? "—",
+          appliedDate: a.appliedDate ?? "",
+          status: a.status as Applicant["status"],
+          experience: a.experience ?? "—",
+          location: a.location ?? "—",
+          avatar: initials(
+            a.firstName ?? a.name.split(" ")[0],
+            (a.lastName ?? a.name.split(" ").slice(1).join(" ")) || "?"
+          ),
+          rating: a.rating,
+        }))
+      )
+    );
+  }, []);
+
 
   // Get unique jobs and departments
   const jobs = Array.from(new Set(applicants.map(a => a.jobTitle)));

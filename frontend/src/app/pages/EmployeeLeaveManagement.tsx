@@ -11,6 +11,9 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { leaveService, type LeaveBalanceRecord, type LeaveRequestRecord } from "../../services/leave.service";
+import { balanceColor } from "../../lib/utils";
+import { ApiError } from "../../lib/api";
 
 type TabType = "requests" | "new-request" | "balance";
 
@@ -21,8 +24,21 @@ interface LeaveRequest {
   endDate: string;
   days: number;
   reason: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "cancelled";
   appliedDate: string;
+}
+
+function mapRequest(r: LeaveRequestRecord): LeaveRequest {
+  return {
+    id: r.id,
+    type: r.type ?? r.leaveType ?? "Leave",
+    startDate: r.startDate,
+    endDate: r.endDate,
+    days: r.days,
+    reason: r.reason ?? "",
+    status: r.status as LeaveRequest["status"],
+    appliedDate: r.appliedDate ?? "",
+  };
 }
 
 interface LeaveBalance {
@@ -53,105 +69,37 @@ export function EmployeeLeaveManagement() {
     setSearchParams({ tab });
   };
 
-  // Personal leave balance
-  const totalLeave = 30;
-  const usedLeave = 12;
-  const remainingLeave = 18;
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
+  const [myLeaveRequests, setMyLeaveRequests] = useState<LeaveRequest[]>([]);
 
-  const leaveBalances: LeaveBalance[] = [
-    {
-      type: "Annual Leave",
-      total: 20,
-      used: 8,
-      remaining: 12,
-      color: "from-[#06B6D4] to-[#06B6D4]",
-    },
-    {
-      type: "Sick Leave",
-      total: 10,
-      used: 3,
-      remaining: 7,
-      color: "from-[#EF4444] to-[#EF4444]",
-    },
-    {
-      type: "Personal Leave",
-      total: 5,
-      used: 1,
-      remaining: 4,
-      color: "from-[#4F46E5] to-[#4338CA]",
-    },
-    {
-      type: "Maternity/Paternity",
-      total: 90,
-      used: 0,
-      remaining: 90,
-      color: "from-[#F59E0B] to-[#F59E0B]",
-    },
-  ];
+  const loadData = async () => {
+    try {
+      const [reqRes, balRes] = await Promise.all([
+        leaveService.myRequests({ per_page: 50 }),
+        leaveService.myBalances(),
+      ]);
+      setMyLeaveRequests(reqRes.data.map(mapRequest));
+      setLeaveBalances(
+        balRes.data.map((b: LeaveBalanceRecord, i: number) => ({
+          type: b.type ?? "Leave",
+          total: b.total,
+          used: b.used,
+          remaining: b.remaining,
+          color: balanceColor(i),
+        }))
+      );
+    } catch {
+      /* keep empty */
+    }
+  };
 
-  // My leave requests (only current employee's data)
-  const [myLeaveRequests, setMyLeaveRequests] = useState<LeaveRequest[]>([
-    {
-      id: 1,
-      type: "Annual Leave",
-      startDate: "2026-05-15",
-      endDate: "2026-05-19",
-      days: 5,
-      reason: "Family vacation",
-      status: "pending",
-      appliedDate: "2026-04-20",
-    },
-    {
-      id: 2,
-      type: "Sick Leave",
-      startDate: "2026-04-10",
-      endDate: "2026-04-12",
-      days: 3,
-      reason: "Medical appointment and recovery",
-      status: "approved",
-      appliedDate: "2026-04-08",
-    },
-    {
-      id: 3,
-      type: "Annual Leave",
-      startDate: "2026-04-01",
-      endDate: "2026-04-05",
-      days: 5,
-      reason: "Personal travel",
-      status: "approved",
-      appliedDate: "2026-03-15",
-    },
-    {
-      id: 4,
-      type: "Personal Leave",
-      startDate: "2026-03-20",
-      endDate: "2026-03-21",
-      days: 2,
-      reason: "Family matters",
-      status: "approved",
-      appliedDate: "2026-03-10",
-    },
-    {
-      id: 5,
-      type: "Annual Leave",
-      startDate: "2026-02-10",
-      endDate: "2026-02-14",
-      days: 5,
-      reason: "Winter vacation",
-      status: "rejected",
-      appliedDate: "2026-01-25",
-    },
-    {
-      id: 6,
-      type: "Sick Leave",
-      startDate: "2026-01-15",
-      endDate: "2026-01-15",
-      days: 1,
-      reason: "Flu symptoms",
-      status: "approved",
-      appliedDate: "2026-01-14",
-    },
-  ]);
+  useEffect(() => {
+    void loadData();
+  }, []);
+
+  const totalLeave = leaveBalances.reduce((s, b) => s + b.total, 0);
+  const usedLeave = leaveBalances.reduce((s, b) => s + b.used, 0);
+  const remainingLeave = leaveBalances.reduce((s, b) => s + b.remaining, 0);
 
   const calculatePercentage = (used: number, total: number) => {
     return Math.round((used / total) * 100);
@@ -228,7 +176,8 @@ export function EmployeeLeaveManagement() {
           {activeTab === "new-request" && (
             <RequestLeaveTab
               onSuccess={(newRequest) => {
-                setMyLeaveRequests([newRequest, ...myLeaveRequests]);
+                setMyLeaveRequests((prev) => [newRequest, ...prev]);
+                void loadData();
                 handleTabChange("requests");
               }}
             />
@@ -387,6 +336,11 @@ function RequestLeaveTab({
     endDate: "",
     reason: "",
   });
+  const [leaveTypes, setLeaveTypes] = useState<{ id: number; name: string }[]>([]);
+
+  useEffect(() => {
+    leaveService.types().then((res) => setLeaveTypes(res.data.map((t) => ({ id: t.id, name: t.name }))));
+  }, []);
 
   const validateForm = () => {
     const newErrors = {
@@ -440,26 +394,21 @@ function RequestLeaveTab({
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    // Create new request
-    const newRequest: LeaveRequest = {
-      id: Date.now(),
-      type: leaveType,
-      startDate: startDate,
-      endDate: endDate,
-      days: calculateDays(),
-      reason: reason,
-      status: "pending",
-      appliedDate: new Date().toISOString().split("T")[0],
-    };
-
-    setIsSubmitting(false);
-    setShowSuccess(true);
-
-    setTimeout(() => {
-      onSuccess(newRequest);
-    }, 2000);
+    try {
+      const created = await leaveService.create({
+        type: leaveType,
+        start_date: startDate,
+        end_date: endDate,
+        reason,
+      });
+      const newRequest = mapRequest(created);
+      setShowSuccess(true);
+      setTimeout(() => onSuccess(newRequest), 1500);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to submit leave request.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleFieldChange = (field: string, value: string) => {
@@ -519,12 +468,12 @@ function RequestLeaveTab({
                 }`}
               >
                 <option value="">Select leave type</option>
-                <option value="Annual Leave">Annual Leave</option>
-                <option value="Sick Leave">Sick Leave</option>
-                <option value="Personal Leave">Personal Leave</option>
-                <option value="Maternity Leave">Maternity Leave</option>
-                <option value="Paternity Leave">Paternity Leave</option>
-                <option value="Unpaid Leave">Unpaid Leave</option>
+                <option value="">Select leave type</option>
+                {leaveTypes.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
               </select>
               {errors.leaveType && (
                 <div className="mt-2 flex items-center gap-1 text-[#EF4444]">

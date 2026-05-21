@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
+import { payrollService, type PayrollPeriodGroup } from "../../services/payroll.service";
+import { AsyncState } from "../components/AsyncState";
 import {
   DollarSign,
   TrendingUp,
@@ -16,99 +18,56 @@ import {
 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 
-interface PayrollPeriod {
-  id: number;
-  name: string;
+type PayrollPeriod = PayrollPeriodGroup & {
   startDate: string;
   endDate: string;
   payDate: string;
   status: "draft" | "processing" | "approved" | "paid";
-  employeeCount: number;
-  totalAmount: number;
-  deductions: number;
-  netPay: number;
-}
+};
 
 export function PayrollDashboard() {
   const navigate = useNavigate();
   const [filterStatus, setFilterStatus] = useState<"all" | PayrollPeriod["status"]>("all");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [payrollPeriods, setPayrollPeriods] = useState<PayrollPeriod[]>([]);
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [totalPayrollThisMonth, setTotalPayrollThisMonth] = useState(0);
+  const [averagePayroll, setAveragePayroll] = useState(0);
 
-  // Payroll periods data
-  const [payrollPeriods] = useState<PayrollPeriod[]>([
-    {
-      id: 1,
-      name: "March 2026 - Period 2",
-      startDate: "2026-03-16",
-      endDate: "2026-03-31",
-      payDate: "2026-04-05",
-      status: "processing",
-      employeeCount: 245,
-      totalAmount: 1850000,
-      deductions: 185000,
-      netPay: 1665000,
-    },
-    {
-      id: 2,
-      name: "March 2026 - Period 1",
-      startDate: "2026-03-01",
-      endDate: "2026-03-15",
-      payDate: "2026-03-20",
-      status: "paid",
-      employeeCount: 243,
-      totalAmount: 1825000,
-      deductions: 182500,
-      netPay: 1642500,
-    },
-    {
-      id: 3,
-      name: "February 2026 - Period 2",
-      startDate: "2026-02-16",
-      endDate: "2026-02-28",
-      payDate: "2026-03-05",
-      status: "paid",
-      employeeCount: 240,
-      totalAmount: 1800000,
-      deductions: 180000,
-      netPay: 1620000,
-    },
-    {
-      id: 4,
-      name: "February 2026 - Period 1",
-      startDate: "2026-02-01",
-      endDate: "2026-02-15",
-      payDate: "2026-02-20",
-      status: "paid",
-      employeeCount: 240,
-      totalAmount: 1800000,
-      deductions: 180000,
-      netPay: 1620000,
-    },
-    {
-      id: 5,
-      name: "January 2026 - Period 2",
-      startDate: "2026-01-16",
-      endDate: "2026-01-31",
-      payDate: "2026-02-05",
-      status: "paid",
-      employeeCount: 238,
-      totalAmount: 1785000,
-      deductions: 178500,
-      netPay: 1606500,
-    },
-  ]);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [listRes, summaryRes] = await Promise.all([
+          payrollService.list(),
+          payrollService.summary(),
+        ]);
+        setPayrollPeriods(
+          listRes.data.map((p) => ({
+            ...p,
+            startDate: p.startDate ?? "",
+            endDate: p.endDate ?? "",
+            payDate: p.payDate ?? "",
+            status: (p.status === "approved" ? "approved" : p.status === "draft" ? "draft" : "processing") as PayrollPeriod["status"],
+          }))
+        );
+        setTotalEmployees(summaryRes.totalEmployees);
+        setTotalPayrollThisMonth(summaryRes.totalPayrollThisMonth);
+        setAveragePayroll(summaryRes.averagePayroll);
+      } catch {
+        setLoadError("Failed to load payroll data");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
-  // Filter periods
-  const filteredPeriods = payrollPeriods.filter(period => 
-    filterStatus === "all" || period.status === filterStatus
+  const filteredPeriods = payrollPeriods.filter(
+    (period) => filterStatus === "all" || period.status === filterStatus
   );
 
-  // Calculate totals
-  const totalEmployees = payrollPeriods[0]?.employeeCount || 0;
-  const currentPeriod = payrollPeriods.find(p => p.status === "processing");
-  const totalPayrollThisMonth = payrollPeriods
-    .filter(p => p.name.includes("March 2026"))
-    .reduce((sum, p) => sum + p.netPay, 0);
-  const avgPayroll = Math.round(payrollPeriods.reduce((sum, p) => sum + p.netPay, 0) / payrollPeriods.length);
+  const currentPeriod = payrollPeriods.find((p) => p.status === "processing" || p.status === "draft");
+  const avgPayroll = averagePayroll;
 
   // Status badge styling
   const getStatusBadge = (status: PayrollPeriod["status"]) => {
@@ -194,6 +153,7 @@ export function PayrollDashboard() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          <AsyncState loading={loading} error={loadError} empty={!loading && payrollPeriods.length === 0} emptyMessage="No payroll periods yet.">
           <div className="max-w-7xl mx-auto space-y-6">
             {/* Status Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -339,7 +299,7 @@ export function PayrollDashboard() {
                     <div
                       key={period.id}
                       className="p-6 hover:bg-[#F9FAFB] transition cursor-pointer"
-                      onClick={() => navigate(`/payroll/${period.id}`)}
+                      onClick={() => navigate(`/payroll/${period.id}/review`)}
                     >
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
                         {/* Left: Period Info */}
@@ -461,6 +421,7 @@ export function PayrollDashboard() {
               </button>
             </div>
           </div>
+          </AsyncState>
         </main>
       </div>
     </AppLayout>

@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { performanceService, type EvaluationAssignmentRecord } from "../../services/performance.service";
+import { ApiError } from "../../lib/api";
 
 type TabType = "tasks" | "results";
 
@@ -45,36 +47,35 @@ export function EmployeePerformance() {
     setSearchParams({ tab });
   };
 
-  // Current employee's assigned evaluation tasks
-  const myTasks: EvaluationTask[] = [
-    {
-      id: 1,
-      type: "self",
-      targetName: "Myself",
-      targetPosition: "Software Engineer",
-      dueDate: "2026-05-31",
-      status: "pending",
-      priority: "high",
-    },
-    {
-      id: 2,
-      type: "peer",
-      targetName: "Sarah Johnson",
-      targetPosition: "Marketing Specialist",
-      dueDate: "2026-05-31",
-      status: "in-progress",
-      priority: "high",
-    },
-    {
-      id: 3,
-      type: "peer",
-      targetName: "Michael Chen",
-      targetPosition: "Senior Developer",
-      dueDate: "2026-05-31",
-      status: "completed",
-      priority: "medium",
-    },
-  ];
+  const [myTasks, setMyTasks] = useState<EvaluationTask[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    performanceService
+      .myAssignments()
+      .then((res) => {
+        const tasks: EvaluationTask[] = res.data.map((a: EvaluationAssignmentRecord) => ({
+          id: a.id,
+          type: (a.type as EvaluationTask["type"]) ?? "self",
+          targetName: a.employee?.name ?? "Employee",
+          targetPosition: a.employee?.position ?? "—",
+          dueDate: typeof a.period === "object" ? a.period?.name ?? "—" : (a.period ?? "—"),
+          status:
+            a.status === "submitted" || a.status === "completed"
+              ? "completed"
+              : a.status === "draft"
+              ? "in-progress"
+              : "pending",
+          priority: "medium" as const,
+        }));
+        setMyTasks(tasks);
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load evaluation tasks.")
+      )
+      .finally(() => setLoading(false));
+  }, []);
 
   const tabs = [
     { id: "tasks" as TabType, label: "My Tasks", icon: ClipboardCheck },
@@ -92,6 +93,9 @@ export function EmployeePerformance() {
       <div className="flex flex-col h-full">
         {/* Header */}
         <header className="bg-white border-b border-[#E5E7EB] px-6 py-4 flex-shrink-0">
+          {error && (
+            <p className="mb-2 text-sm text-[#EF4444]">{error}</p>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-xl text-[#111827]">My Performance</h1>

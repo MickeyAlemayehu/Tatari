@@ -13,9 +13,9 @@ class EmployeeController extends Controller
     public function index(Request $request): JsonResponse
     {
         $employees = Employee::query()
-            ->select(['id', 'first_name', 'last_name', 'email', 'position', 'permission_level', 'status'])
+            ->with('department:id,name')
             ->orderBy('last_name')
-            ->paginate(15);
+            ->paginate($request->integer('per_page', 50));
 
         return response()->json($employees);
     }
@@ -41,7 +41,7 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee): JsonResponse
     {
-        return response()->json($employee);
+        return response()->json($employee->load('department:id,name', 'manager:id,first_name,last_name'));
     }
 
     public function update(Request $request, Employee $employee): JsonResponse

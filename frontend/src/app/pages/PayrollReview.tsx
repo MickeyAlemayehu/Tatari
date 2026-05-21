@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Download, Send, Edit, Eye, Users, DollarSign, Calendar, AlertCircle, CheckCircle, FileText } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { AsyncState } from "../components/AsyncState";
+import { payrollService, type PayrollRecord } from "../../services/payroll.service";
+import { ApiError } from "../../lib/api";
+import { formatDate } from "../../lib/utils";
 
 interface Employee {
   id: number;
@@ -34,158 +38,66 @@ export function PayrollReview() {
   const [expandedRows, setExpandedRows] = useState<number[]>([]);
   const [isApproving, setIsApproving] = useState(false);
   const [isApproved, setIsApproved] = useState(false);
-
-  // Payroll period data
-  const payrollPeriod = {
-    id: 1,
-    name: "March 2026 - Period 2",
-    startDate: "2026-03-16",
-    endDate: "2026-03-31",
-    payDate: "2026-04-05",
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [payrollPeriod, setPayrollPeriod] = useState({
+    id: 0,
+    name: "",
+    startDate: "",
+    endDate: "",
+    payDate: "",
     status: "processing",
-  };
+  });
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Employee payroll data
-  const [employees] = useState<Employee[]>([
-    {
-      id: 1,
-      employeeId: "EMP001",
-      name: "Sarah Johnson",
-      department: "Engineering",
-      position: "Senior Software Engineer",
-      baseSalary: 8500,
-      allowances: {
-        housing: 300,
-        transport: 150,
-        meal: 50,
-      },
-      bonuses: 1000,
-      deductions: {
-        tax: 850,
-        insurance: 200,
-        pension: 425,
-        other: 0,
-      },
-      grossPay: 10000,
-      totalDeductions: 1475,
-      netPay: 8525,
-    },
-    {
-      id: 2,
-      employeeId: "EMP002",
-      name: "Michael Chen",
-      department: "Engineering",
-      position: "Frontend Developer",
-      baseSalary: 7000,
-      allowances: {
-        housing: 250,
-        transport: 100,
-        meal: 50,
-      },
-      bonuses: 500,
-      deductions: {
-        tax: 700,
-        insurance: 200,
-        pension: 350,
-        other: 0,
-      },
-      grossPay: 7900,
-      totalDeductions: 1250,
-      netPay: 6650,
-    },
-    {
-      id: 3,
-      employeeId: "EMP003",
-      name: "Emily Davis",
-      department: "Marketing",
-      position: "Marketing Manager",
-      baseSalary: 7500,
-      allowances: {
-        housing: 280,
-        transport: 120,
-        meal: 50,
-      },
-      bonuses: 800,
-      deductions: {
-        tax: 750,
-        insurance: 200,
-        pension: 375,
-        other: 0,
-      },
-      grossPay: 8750,
-      totalDeductions: 1325,
-      netPay: 7425,
-    },
-    {
-      id: 4,
-      employeeId: "EMP004",
-      name: "David Wilson",
-      department: "Sales",
-      position: "Sales Director",
-      baseSalary: 9000,
-      allowances: {
-        housing: 350,
-        transport: 200,
-        meal: 50,
-      },
-      bonuses: 1500,
-      deductions: {
-        tax: 950,
-        insurance: 200,
-        pension: 450,
-        other: 100,
-      },
-      grossPay: 11100,
-      totalDeductions: 1700,
-      netPay: 9400,
-    },
-    {
-      id: 5,
-      employeeId: "EMP005",
-      name: "Jessica Martinez",
-      department: "HR",
-      position: "HR Manager",
-      baseSalary: 7200,
-      allowances: {
-        housing: 270,
-        transport: 100,
-        meal: 50,
-      },
-      bonuses: 600,
-      deductions: {
-        tax: 720,
-        insurance: 200,
-        pension: 360,
-        other: 0,
-      },
-      grossPay: 8220,
-      totalDeductions: 1280,
-      netPay: 6940,
-    },
-    {
-      id: 6,
-      employeeId: "EMP006",
-      name: "Robert Taylor",
-      department: "Finance",
-      position: "Financial Analyst",
-      baseSalary: 7800,
-      allowances: {
-        housing: 290,
-        transport: 130,
-        meal: 50,
-      },
-      bonuses: 700,
-      deductions: {
-        tax: 780,
-        insurance: 200,
-        pension: 390,
-        other: 0,
-      },
-      grossPay: 9070,
-      totalDeductions: 1370,
-      netPay: 7700,
-    },
-  ]);
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    payrollService
+      .get(Number(id))
+      .then(async (row) => {
+        const period = await payrollService.period(row.year, row.month);
+        setPayrollPeriod({
+          id: period.id ?? Number(id),
+          name: period.name,
+          startDate: period.startDate ?? "",
+          endDate: period.endDate ?? "",
+          payDate: period.payDate ?? "",
+          status: period.status,
+        });
+        const rows = period.employees ?? [];
+        setEmployees(
+          rows.map((r: PayrollRecord) => ({
+            id: r.id,
+            employeeId: r.employeeId ?? `EMP${r.id}`,
+            name: r.employeeName ?? "—",
+            department: r.department ?? "—",
+            position: r.position ?? "—",
+            baseSalary: r.baseSalary ?? 0,
+            allowances: {
+              housing: r.allowances?.housing ?? 0,
+              transport: r.allowances?.transport ?? 0,
+              meal: r.allowances?.meal ?? 0,
+            },
+            bonuses: r.bonuses ?? 0,
+            deductions: {
+              tax: r.deductions?.tax ?? 0,
+              insurance: r.deductions?.insurance ?? 0,
+              pension: r.deductions?.pension ?? 0,
+              other: r.deductions?.other ?? 0,
+            },
+            grossPay: r.grossPay ?? 0,
+            totalDeductions: r.totalDeductions ?? 0,
+            netPay: r.netPay ?? r.net_salary ?? 0,
+          }))
+        );
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load payroll period.")
+      )
+      .finally(() => setLoading(false));
+  }, [id]);
+
 
   // Calculate totals
   const totalEmployees = employees.length;
@@ -213,15 +125,17 @@ export function PayrollReview() {
     );
   };
 
-  // Handle approve
-  const handleApprove = () => {
+  const handleApprove = async () => {
+    if (!id || employees.length === 0) return;
     setIsApproving(true);
-    
-    // Simulate approval process
-    setTimeout(() => {
-      setIsApproving(false);
+    try {
+      await Promise.all(employees.map((e) => payrollService.approve(e.id)));
       setIsApproved(true);
-    }, 2000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to approve payroll.");
+    } finally {
+      setIsApproving(false);
+    }
   };
 
   // Format currency

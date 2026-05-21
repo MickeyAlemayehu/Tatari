@@ -58,6 +58,24 @@ class ApiAuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user('api'));
+        $employee = $request->user('api');
+        $employee->load('department:id,name');
+
+        return response()->json([
+            'id' => $employee->id,
+            'email' => $employee->email,
+            'first_name' => $employee->first_name,
+            'last_name' => $employee->last_name,
+            'position' => $employee->position,
+            'department_id' => $employee->department_id,
+            'permission_level' => $employee->permission_level,
+            'permission_override' => $employee->permission_override,
+            'revoked_permissions' => $employee->revoked_permissions,
+            'status' => $employee->status,
+            'department' => $employee->department ? [
+                'id' => $employee->department->id,
+                'name' => $employee->department->name,
+            ] : null,
+        ]);
     }
 }

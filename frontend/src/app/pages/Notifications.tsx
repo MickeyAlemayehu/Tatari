@@ -1,236 +1,165 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppLayout } from "../components/AppLayout";
-import { Bell, Check, Trash2, Filter, UserPlus, Calendar, DollarSign, FileText, Award } from "lucide-react";
+import { Bell, Check, Trash2, Filter, Calendar, DollarSign, FileText, Award, UserPlus } from "lucide-react";
 import { Badge } from "../components/Badge";
+import { AsyncState } from "../components/AsyncState";
+import {
+  notificationsService,
+  type NotificationRecord,
+} from "../../services/notifications.service";
+import { ApiError } from "../../lib/api";
 
-interface Notification {
-  id: number;
-  title: string;
-  message: string;
-  type: "info" | "success" | "warning" | "alert";
-  category: string;
-  timestamp: string;
-  read: boolean;
-  icon: any;
-}
+const iconMap: Record<string, typeof Bell> = {
+  Leave: Calendar,
+  Payroll: DollarSign,
+  Recruitment: FileText,
+  Performance: Award,
+  Employee: UserPlus,
+};
 
 export function Notifications() {
-  const [notifications, setNotifications] = useState<Notification[]>([
-    {
-      id: 1,
-      title: "New Leave Request",
-      message: "Sarah Johnson has submitted a leave request for Mar 25-29",
-      type: "info",
-      category: "Leave",
-      timestamp: "2 minutes ago",
-      read: false,
-      icon: Calendar,
-    },
-    {
-      id: 2,
-      title: "Payroll Approved",
-      message: "March 2026 payroll has been approved and processed",
-      type: "success",
-      category: "Payroll",
-      timestamp: "1 hour ago",
-      read: false,
-      icon: DollarSign,
-    },
-    {
-      id: 3,
-      title: "New Job Application",
-      message: "5 new applications received for Senior Developer position",
-      type: "info",
-      category: "Recruitment",
-      timestamp: "3 hours ago",
-      read: false,
-      icon: FileText,
-    },
-    {
-      id: 4,
-      title: "Performance Review Due",
-      message: "8 performance reviews are due this week",
-      type: "warning",
-      category: "Performance",
-      timestamp: "5 hours ago",
-      read: true,
-      icon: Award,
-    },
-    {
-      id: 5,
-      title: "New Employee Onboarding",
-      message: "Michael Chen starts on April 15, 2026",
-      type: "info",
-      category: "Employee",
-      timestamp: "1 day ago",
-      read: true,
-      icon: UserPlus,
-    },
-  ]);
-
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [filterType, setFilterType] = useState<"all" | "unread">("all");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const markAsRead = (id: number) => {
-    setNotifications(
-      notifications.map((notif) =>
-        notif.id === id ? { ...notif, read: true } : notif
-      )
-    );
-  };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await notificationsService.list({
+        unread: filterType === "unread",
+        per_page: 50,
+      });
+      setNotifications(res.data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to load notifications.");
+    } finally {
+      setLoading(false);
+    }
+  }, [filterType]);
 
-  const markAllAsRead = () => {
-    setNotifications(notifications.map((notif) => ({ ...notif, read: true })));
-  };
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const deleteNotification = (id: number) => {
-    setNotifications(notifications.filter((notif) => notif.id !== id));
-  };
-
-  const filteredNotifications =
-    filterType === "unread"
-      ? notifications.filter((n) => !n.read)
-      : notifications;
-
-  const unreadCount = notifications.filter((n) => !n.read).length;
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "success":
-        return "bg-[#DCFCE7] text-[#22C55E]";
-      case "warning":
-        return "bg-[#FFFBEB] text-[#F59E0B]";
-      case "alert":
-        return "bg-[#FEF2F2] text-[#EF4444]";
-      default:
-        return "bg-[#EEF2FF] text-[#4F46E5]";
+  const markAsRead = async (id: number) => {
+    try {
+      await notificationsService.markRead(id);
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+      );
+    } catch {
+      /* ignore */
     }
   };
 
+  const markAllAsRead = async () => {
+    try {
+      await notificationsService.markAllRead();
+      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const deleteNotification = async (id: number) => {
+    try {
+      await notificationsService.remove(id);
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+    } catch {
+      /* ignore */
+    }
+  };
+
+  const unreadCount = notifications.filter((n) => !n.read).length;
+
   return (
-    <AppLayout
-      title="Notifications"
-      subtitle={`${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`}
-    >
-      <div className="p-6">
-        {/* Actions Bar */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <AppLayout title="Notifications" subtitle="Stay updated with system alerts">
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setFilterType("all")}
-              className={`px-4 py-2 rounded-lg text-sm transition ${
-                filterType === "all"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white text-[#6B7280] border border-[#E5E7EB] hover:bg-[#F9FAFB]"
+              className={`px-4 py-2 rounded-lg text-sm ${
+                filterType === "all" ? "bg-[#4F46E5] text-white" : "bg-white border border-[#E5E7EB]"
               }`}
             >
-              All ({notifications.length})
+              All
             </button>
             <button
               onClick={() => setFilterType("unread")}
-              className={`px-4 py-2 rounded-lg text-sm transition ${
-                filterType === "unread"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white text-[#6B7280] border border-[#E5E7EB] hover:bg-[#F9FAFB]"
+              className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+                filterType === "unread" ? "bg-[#4F46E5] text-white" : "bg-white border border-[#E5E7EB]"
               }`}
             >
-              Unread ({unreadCount})
+              <Filter className="w-4 h-4" />
+              Unread {unreadCount > 0 && `(${unreadCount})`}
             </button>
           </div>
-
-          <button
-            onClick={markAllAsRead}
-            disabled={unreadCount === 0}
-            className="flex items-center gap-2 px-4 py-2 text-sm text-[#4F46E5] hover:bg-[#EEF2FF] rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Check className="w-4 h-4" />
-            Mark all as read
-          </button>
-        </div>
-
-        {/* Notifications List */}
-        <div className="bg-white rounded-xl border border-[#E5E7EB]">
-          {filteredNotifications.length === 0 ? (
-            <div className="p-12 text-center">
-              <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-[#111827] mb-2">No notifications</h3>
-              <p className="text-sm text-[#6B7280]">
-                {filterType === "unread"
-                  ? "You're all caught up!"
-                  : "You don't have any notifications yet"}
-              </p>
-            </div>
-          ) : (
-            <div className="divide-y divide-gray-200">
-              {filteredNotifications.map((notification) => {
-                const Icon = notification.icon;
-                return (
-                  <div
-                    key={notification.id}
-                    className={`p-6 hover:bg-[#F9FAFB] transition ${
-                      !notification.read ? "bg-[#EEF2FF]/30" : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-4">
-                      <div
-                        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${getTypeColor(
-                          notification.type
-                        )}`}
-                      >
-                        <Icon className="w-5 h-5" />
-                      </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4 mb-2">
-                          <div className="flex-1">
-                            <h4 className="text-sm text-[#111827] mb-1">
-                              {notification.title}
-                            </h4>
-                            <p className="text-sm text-[#6B7280]">
-                              {notification.message}
-                            </p>
-                          </div>
-                          {!notification.read && (
-                            <span className="w-2 h-2 bg-indigo-600 rounded-full flex-shrink-0 mt-1"></span>
-                          )}
-                        </div>
-
-                        <div className="flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-3">
-                            <Badge variant="secondary" size="sm">
-                              {notification.category}
-                            </Badge>
-                            <span className="text-xs text-[#6B7280]">
-                              {notification.timestamp}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {!notification.read && (
-                              <button
-                                onClick={() => markAsRead(notification.id)}
-                                className="p-2 text-[#6B7280] hover:bg-white hover:text-[#4F46E5] rounded-lg transition"
-                                title="Mark as read"
-                              >
-                                <Check className="w-4 h-4" />
-                              </button>
-                            )}
-                            <button
-                              onClick={() => deleteNotification(notification.id)}
-                              className="p-2 text-[#6B7280] hover:bg-white hover:text-[#EF4444] rounded-lg transition"
-                              title="Delete"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+          {unreadCount > 0 && (
+            <button
+              onClick={() => void markAllAsRead()}
+              className="flex items-center gap-2 text-sm text-[#4F46E5] hover:text-indigo-700"
+            >
+              <Check className="w-4 h-4" />
+              Mark all as read
+            </button>
           )}
         </div>
+
+        <AsyncState loading={loading} error={error} empty={!loading && notifications.length === 0}>
+          <div className="space-y-3">
+            {notifications.map((notification) => {
+              const Icon = iconMap[notification.category] ?? Bell;
+              return (
+                <div
+                  key={notification.id}
+                  className={`bg-white rounded-xl border p-4 ${
+                    notification.read ? "border-[#E5E7EB]" : "border-[#4F46E5]/30 bg-[#EEF2FF]/30"
+                  }`}
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 bg-[#EEF2FF] rounded-lg flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-5 h-5 text-[#4F46E5]" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="text-sm text-[#111827]">{notification.title}</h3>
+                        {!notification.read && (
+                          <span className="w-2 h-2 bg-[#4F46E5] rounded-full" />
+                        )}
+                        <Badge variant="default" size="sm">
+                          {notification.category}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-[#6B7280] mb-2">{notification.message}</p>
+                      <p className="text-xs text-[#6B7280]">{notification.timestamp}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!notification.read && (
+                        <button
+                          onClick={() => void markAsRead(notification.id)}
+                          className="p-2 text-[#6B7280] hover:text-[#4F46E5] rounded-lg"
+                          title="Mark as read"
+                        >
+                          <Check className="w-4 h-4" />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => void deleteNotification(notification.id)}
+                        className="p-2 text-[#6B7280] hover:text-[#EF4444] rounded-lg"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </AsyncState>
       </div>
     </AppLayout>
   );

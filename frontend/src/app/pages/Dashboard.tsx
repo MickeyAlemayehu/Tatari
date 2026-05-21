@@ -1,137 +1,81 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router";
-import {
-  Users,
-  UserCheck,
-  Calendar,
-  TrendingUp,
-  Clock,
-  Award,
-  Briefcase,
-} from "lucide-react";
+import { Users, Calendar, TrendingUp, Briefcase, Clock } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { employeesService } from "../../services/employees.service";
+import { leaveService } from "../../services/leave.service";
+import { jobsService } from "../../services/jobs.service";
+import { performanceService } from "../../services/performance.service";
+import { initials, formatDate } from "../../lib/utils";
+import { useAuth } from "../../contexts/AuthContext";
 
 export function Dashboard() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { employee } = useAuth();
 
-  // Detect role from URL path
   const currentRole = location.pathname.startsWith("/employee/")
     ? "employee"
     : location.pathname.startsWith("/admin")
     ? "admin"
     : "hr";
 
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [pendingLeave, setPendingLeave] = useState(0);
+  const [activeJobs, setActiveJobs] = useState(0);
+  const [activePeriods, setActivePeriods] = useState(0);
+  const [recentEmployees, setRecentEmployees] = useState<
+    { id: number; name: string; role: string; department: string; status: string; avatar: string }[]
+  >([]);
+  const [upcomingLeaves, setUpcomingLeaves] = useState<
+    { id: number; employee: string; type: string; dates: string; status: string }[]
+  >([]);
+
+  useEffect(() => {
+    employeesService.list({ per_page: 5 }).then((res) => {
+      setTotalEmployees(res.total);
+      setRecentEmployees(
+        res.data.map((e) => ({
+          id: e.id,
+          name: `${e.first_name} ${e.last_name}`,
+          role: e.position ?? "—",
+          department: e.department?.name ?? "—",
+          status: e.status === "inactive" ? "inactive" : "active",
+          avatar: initials(e.first_name, e.last_name),
+        }))
+      );
+    }).catch(() => {});
+
+    leaveService.summary().then((s) => setPendingLeave(s.pendingLeaveRequests)).catch(() => {});
+    jobsService.list({ status: "open", per_page: 100 }).then((res) => setActiveJobs(res.data.length)).catch(() => {});
+    performanceService.periods().then((res) => {
+      setActivePeriods(res.data.filter((p) => p.status === "active").length);
+    }).catch(() => {});
+
+    leaveService.list({ status: "pending", per_page: 5 }).then((res) => {
+      setUpcomingLeaves(
+        res.data.map((r) => ({
+          id: r.id,
+          employee: r.employee?.name ?? "Unknown",
+          type: r.type ?? r.leaveType ?? "Leave",
+          dates: `${formatDate(r.startDate)} – ${formatDate(r.endDate)}`,
+          status: r.status,
+        }))
+      );
+    }).catch(() => {});
+  }, []);
+
   const stats = [
-    {
-      title: "Total Employees",
-      value: "248",
-      change: "+12%",
-      trend: "up",
-      icon: Users,
-      color: "indigo",
-    },
-    {
-      title: "Present Today",
-      value: "231",
-      change: "93%",
-      trend: "neutral",
-      icon: UserCheck,
-      color: "green",
-    },
-    {
-      title: "On Leave",
-      value: "12",
-      change: "-8%",
-      trend: "down",
-      icon: Calendar,
-      color: "amber",
-    },
-    {
-      title: "New Hires",
-      value: "8",
-      change: "+4",
-      trend: "up",
-      icon: TrendingUp,
-      color: "purple",
-    },
-  ];
-
-  const recentEmployees = [
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      role: "Senior Developer",
-      department: "Engineering",
-      status: "active",
-      avatar: "SJ",
-    },
-    {
-      id: 2,
-      name: "Michael Chen",
-      role: "Product Manager",
-      department: "Product",
-      status: "active",
-      avatar: "MC",
-    },
-    {
-      id: 3,
-      name: "Emily Davis",
-      role: "UX Designer",
-      department: "Design",
-      status: "on-leave",
-      avatar: "ED",
-    },
-    {
-      id: 4,
-      name: "James Wilson",
-      role: "HR Manager",
-      department: "Human Resources",
-      status: "active",
-      avatar: "JW",
-    },
-    {
-      id: 5,
-      name: "Lisa Anderson",
-      role: "Marketing Lead",
-      department: "Marketing",
-      status: "active",
-      avatar: "LA",
-    },
-  ];
-
-  const upcomingLeaves = [
-    {
-      id: 1,
-      employee: "John Doe",
-      type: "Annual Leave",
-      dates: "Mar 25 - Mar 29",
-      status: "approved",
-    },
-    {
-      id: 2,
-      employee: "Jane Smith",
-      type: "Sick Leave",
-      dates: "Mar 22",
-      status: "pending",
-    },
-    {
-      id: 3,
-      employee: "Robert Brown",
-      type: "Personal Leave",
-      dates: "Mar 28 - Mar 30",
-      status: "approved",
-    },
+    { title: "Total Employees", value: String(totalEmployees), change: "Active workforce", trend: "neutral" as const, icon: Users, color: "indigo" },
+    { title: "Pending Leave", value: String(pendingLeave), change: "Awaiting approval", trend: "neutral" as const, icon: Calendar, color: "amber" },
+    { title: "Open Jobs", value: String(activeJobs), change: "Currently hiring", trend: "neutral" as const, icon: Briefcase, color: "green" },
+    { title: "Active Evaluations", value: String(activePeriods), change: "Open periods", trend: "neutral" as const, icon: TrendingUp, color: "purple" },
   ];
 
   const getUserName = () => {
-    // In a real app, this would come from authentication
-    return currentRole === "employee"
-      ? "John Doe"
-      : currentRole === "admin"
-      ? "Admin"
-      : "HR Manager";
+    if (employee) return `${employee.first_name} ${employee.last_name}`;
+    return currentRole === "admin" ? "Admin" : "HR Manager";
   };
 
   return (

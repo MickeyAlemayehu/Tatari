@@ -1,10 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Save,FileText, Plus, Trash2, AlertCircle, CheckCircle } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { jobsService } from "../../services/jobs.service";
+import { departmentsService, type DepartmentRecord } from "../../services/departments.service";
+import { ApiError } from "../../lib/api";
 
 export function CreateJob() {
   const navigate = useNavigate();
+  const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void departmentsService.list().then((res) => setDepartments(res.data)).catch(() => {});
+  }, []);
   const [formData, setFormData] = useState({
     title: "",
     department: "",
@@ -68,21 +78,48 @@ export function CreateJob() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle publish
-  const handlePublish = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (validateForm()) {
-      // Here you would typically send the data to your backend
-      console.log("Publishing job:", formData);
+  const buildPayload = (status: "open" | "draft") => ({
+    title: formData.title.trim(),
+    department: formData.department,
+    location: formData.location.trim(),
+    type: formData.type,
+    positions: parseInt(formData.positions, 10),
+    salaryMin: formData.salaryMin ? parseFloat(formData.salaryMin) : undefined,
+    salaryMax: formData.salaryMax ? parseFloat(formData.salaryMax) : undefined,
+    deadline: formData.deadline,
+    description: formData.description.trim(),
+    responsibilities: formData.responsibilities.trim() || undefined,
+    requirements: formData.requirements.trim() || undefined,
+    benefits: formData.benefits.trim() || undefined,
+    status,
+  });
+
+  const submitJob = async (status: "open" | "draft") => {
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      await jobsService.create(buildPayload(status));
       navigate("/jobs");
+    } catch (e) {
+      setSaveError(e instanceof ApiError ? e.message : "Failed to save job");
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  // Handle save as draft
+  const handlePublish = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (validateForm()) {
+      void submitJob("open");
+    }
+  };
+
   const handleSaveDraft = () => {
-    // Save without full validation
-    console.log("Saving draft:", formData);
-    navigate("/jobs");
+    if (!formData.title.trim()) {
+      setErrors({ title: "Job title is required" });
+      return;
+    }
+    void submitJob("draft");
   };
 
   return (
@@ -164,12 +201,11 @@ export function CreateJob() {
                         }`}
                       >
                         <option value="">Select Department</option>
-                        <option value="Engineering">Engineering</option>
-                        <option value="Design">Design</option>
-                        <option value="Marketing">Marketing</option>
-                        <option value="Sales">Sales</option>
-                        <option value="Human Resources">Human Resources</option>
-                        <option value="Finance">Finance</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.name}>
+                            {d.name}
+                          </option>
+                        ))}
                         <option value="Operations">Operations</option>
                         <option value="Customer Support">Customer Support</option>
                       </select>

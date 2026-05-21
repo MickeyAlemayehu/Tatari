@@ -22,6 +22,7 @@ import {
   Laptop,
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface NavigationItem {
   name: string;
@@ -33,6 +34,7 @@ interface NavigationItem {
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
   const [expandedSections, setExpandedSections] = useState<string[]>([
     "leave-management",
     "performance",
@@ -222,7 +224,8 @@ export function AppSidebar() {
       ? adminNavigation
       : hrNavigation;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await logout();
     navigate("/");
   };
 

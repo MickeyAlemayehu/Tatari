@@ -1,4 +1,10 @@
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
+import { employeesService } from "../../services/employees.service";
+import { leaveService } from "../../services/leave.service";
+import { ApiError } from "../../lib/api";
+import { initials, formatDate } from "../../lib/utils";
+import { AsyncState } from "../components/AsyncState";
 import {
   Mail,
   Phone,
@@ -11,230 +17,76 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { EmployeeCompensationSection } from "../components/EmployeeCompensationSection";
 
-// Employee database
-const employeeDatabase: Record<string, any> = {
-  "1": {
-    id: "1",
-    firstName: "Sarah",
-    lastName: "Johnson",
-    email: "sarah.johnson@company.com",
-    phone: "+1 (555) 123-4567",
-    dateOfBirth: "1992-05-15",
-    employeeId: "EMP-2023-1001",
-    department: "Engineering",
-    role: "Senior Developer",
-    status: "active",
-    joinDate: "2023-01-15",
-    reportingManager: "Michael Chen",
-    address: "123 Main Street, Apt 4B",
-    city: "San Francisco",
-    state: "California",
-    zipCode: "94102",
-    avatar: "SJ",
-    leaveHistory: [
-      {
-        id: 1,
-        type: "Annual Leave",
-        startDate: "2026-04-15",
-        endDate: "2026-04-19",
-        days: 5,
-        status: "approved",
-        approvedBy: "Michael Chen",
-      },
-      {
-        id: 2,
-        type: "Sick Leave",
-        startDate: "2026-03-10",
-        endDate: "2026-03-12",
-        days: 3,
-        status: "approved",
-        approvedBy: "Michael Chen",
-      },
-    ],
-    performance: {
-      selfEvaluation: 4.2,
-      peerEvaluation: 4.5,
-      managerEvaluation: 4.3,
-      finalScore: 4.3,
-      lastReviewDate: "2026-03-15",
-    },
-    equipment: [
-      {
-        id: 1,
-        name: "MacBook Pro 16-inch",
-        category: "Laptop",
-        serialNumber: "C02ZH12345678",
-        assignedDate: "2023-01-15",
-        status: "active",
-      },
-      {
-        id: 2,
-        name: "Dell UltraSharp 27-inch Monitor",
-        category: "Display",
-        serialNumber: "CN-0P2418-74180",
-        assignedDate: "2023-01-15",
-        status: "active",
-      },
-    ],
-  },
-  "2": {
-    id: "2",
-    firstName: "Michael",
-    lastName: "Chen",
-    email: "michael.chen@company.com",
-    phone: "+1 (555) 234-5678",
-    dateOfBirth: "1988-08-22",
-    employeeId: "EMP-2023-1002",
-    department: "Product",
-    role: "Product Manager",
-    status: "active",
-    joinDate: "2023-03-20",
-    reportingManager: "Lisa Anderson",
-    address: "456 Oak Avenue",
-    city: "San Francisco",
-    state: "California",
-    zipCode: "94103",
-    avatar: "MC",
-    leaveHistory: [
-      {
-        id: 1,
-        type: "Annual Leave",
-        startDate: "2026-05-01",
-        endDate: "2026-05-05",
-        days: 5,
-        status: "pending",
-        approvedBy: null,
-      },
-    ],
-    performance: {
-      selfEvaluation: 4.5,
-      peerEvaluation: 4.7,
-      managerEvaluation: 4.6,
-      finalScore: 4.6,
-      lastReviewDate: "2026-03-20",
-    },
-    equipment: [
-      {
-        id: 1,
-        name: "MacBook Air M2",
-        category: "Laptop",
-        serialNumber: "C02AB98765432",
-        assignedDate: "2023-03-20",
-        status: "active",
-      },
-    ],
-  },
-  "3": {
-    id: "3",
-    firstName: "Emily",
-    lastName: "Davis",
-    email: "emily.davis@company.com",
-    phone: "+1 (555) 345-6789",
-    dateOfBirth: "1995-03-10",
-    employeeId: "EMP-2023-1003",
-    department: "Design",
-    role: "UX Designer",
-    status: "on-leave",
-    joinDate: "2023-02-10",
-    reportingManager: "Sarah Johnson",
-    address: "789 Pine Street",
-    city: "San Francisco",
-    state: "California",
-    zipCode: "94104",
-    avatar: "ED",
-    leaveHistory: [
-      {
-        id: 1,
-        type: "Maternity Leave",
-        startDate: "2026-04-01",
-        endDate: "2026-07-01",
-        days: 90,
-        status: "approved",
-        approvedBy: "Sarah Johnson",
-      },
-    ],
-    performance: {
-      selfEvaluation: 4.0,
-      peerEvaluation: 4.2,
-      managerEvaluation: 4.1,
-      finalScore: 4.1,
-      lastReviewDate: "2026-02-28",
-    },
-    equipment: [
-      {
-        id: 1,
-        name: "MacBook Pro 14-inch",
-        category: "Laptop",
-        serialNumber: "C02CD11223344",
-        assignedDate: "2023-02-10",
-        status: "active",
-      },
-      {
-        id: 2,
-        name: "Wacom Tablet",
-        category: "Accessory",
-        serialNumber: "WAC-12345",
-        assignedDate: "2023-02-10",
-        status: "active",
-      },
-    ],
-  },
-  "4": {
-    id: "4",
-    firstName: "James",
-    lastName: "Wilson",
-    email: "james.wilson@company.com",
-    phone: "+1 (555) 456-7890",
-    dateOfBirth: "1990-11-05",
-    employeeId: "EMP-2023-1004",
-    department: "Marketing",
-    role: "Marketing Specialist",
-    status: "active",
-    joinDate: "2023-03-28",
-    reportingManager: "Lisa Anderson",
-    address: "321 Maple Drive",
-    city: "San Francisco",
-    state: "California",
-    zipCode: "94105",
-    avatar: "JW",
-    leaveHistory: [
-      {
-        id: 1,
-        type: "Annual Leave",
-        startDate: "2026-06-15",
-        endDate: "2026-06-20",
-        days: 6,
-        status: "approved",
-        approvedBy: "Lisa Anderson",
-      },
-    ],
-    performance: {
-      selfEvaluation: 3.8,
-      peerEvaluation: 4.0,
-      managerEvaluation: 3.9,
-      finalScore: 3.9,
-      lastReviewDate: "2026-03-28",
-    },
-    equipment: [
-      {
-        id: 1,
-        name: "Dell XPS 15",
-        category: "Laptop",
-        serialNumber: "DL-XPS-99887",
-        assignedDate: "2023-03-28",
-        status: "active",
-      },
-    ],
-  },
-};
 
 export function EmployeeProfile() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [employee, setEmployee] = useState<Record<string, unknown> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Get employee data by ID, fallback to employee 1
-  const employee = employeeDatabase[id || "1"] || employeeDatabase["1"];
+  useEffect(() => {
+    if (!id) return;
+    setLoading(true);
+    Promise.all([
+      employeesService.get(Number(id)),
+      leaveService.list({ employee_id: Number(id), per_page: 20 }).catch(() => ({ data: [] })),
+    ])
+      .then(([emp, leaveRes]) => {
+        const leaveHistory = leaveRes.data.map((r) => ({
+            id: r.id,
+            type: r.leaveType ?? r.type,
+            startDate: r.startDate,
+            endDate: r.endDate,
+            days: r.days,
+            status: r.status,
+            approvedBy: "—",
+          }));
+        const mgr = emp.manager as { first_name?: string; last_name?: string } | undefined;
+        setEmployee({
+          id: emp.id,
+          firstName: emp.first_name,
+          lastName: emp.last_name,
+          email: emp.email,
+          phone: "—",
+          dateOfBirth: "",
+          address: "",
+          city: "",
+          state: "",
+          zipCode: "",
+          department: emp.department?.name ?? "—",
+          role: emp.position,
+          status: emp.status === "inactive" ? "inactive" : "active",
+          joinDate: emp.created_at,
+          avatar: initials(emp.first_name, emp.last_name),
+          employeeId: `EMP-${String(emp.id).padStart(3, "0")}`,
+          reportingManager: mgr ? `${mgr.first_name} ${mgr.last_name}` : "—",
+          leaveHistory,
+          performance: {
+            selfEvaluation: 0,
+            peerEvaluation: 0,
+            managerEvaluation: 0,
+            finalScore: 0,
+            lastReviewDate: new Date().toISOString(),
+          },
+          equipment: [],
+        });
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load employee.")
+      )
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  if (loading || error || !employee) {
+    return (
+      <AppLayout title="Employee Profile" subtitle="View employee details">
+        <AsyncState loading={loading} error={error} empty={!employee && !loading && !error} />
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout title="Employee Profile" subtitle="View employee details">
@@ -258,7 +110,7 @@ export function EmployeeProfile() {
               </button>
               <span>/</span>
               <span className="text-[#111827]">
-                {employee.firstName} {employee.lastName}
+                {String(employee.firstName)} {String(employee.lastName)}
               </span>
             </div>
           </div>
@@ -276,7 +128,7 @@ export function EmployeeProfile() {
                 <div>
                   <div className="flex items-center gap-3 mb-2">
                     <h2 className="text-2xl text-[#111827]">
-                      {employee.firstName} {employee.lastName}
+                      {String(employee.firstName)} {String(employee.lastName)}
                     </h2>
                     <Badge variant={employee.status === "active" ? "success" : "warning"}>
                       {employee.status === "active" ? "Active" : "On Leave"}
@@ -327,7 +179,9 @@ export function EmployeeProfile() {
                 <div>
                   <p className="text-xs text-[#6B7280] mb-1">Date of Birth</p>
                   <p className="text-sm text-[#111827]">
-                    {new Date(employee.dateOfBirth).toLocaleDateString()}
+                    {employee.dateOfBirth
+                      ? new Date(String(employee.dateOfBirth)).toLocaleDateString()
+                      : "—"}
                   </p>
                 </div>
                 <div>
@@ -482,6 +336,8 @@ export function EmployeeProfile() {
                 </div>
               </div>
             </div>
+
+            {id && <EmployeeCompensationSection employeeId={Number(id)} />}
 
             {/* Assigned Equipment */}
             <div className="bg-white rounded-xl border border-[#E5E7EB] p-6 lg:col-span-2">

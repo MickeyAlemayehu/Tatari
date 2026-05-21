@@ -1,5 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
+import { applicantsService, type ApplicantRecord } from "../../services/applicants.service";
+import { AsyncState } from "../components/AsyncState";
+import { ApiError } from "../../lib/api";
 import {
   ArrowLeft,
   Mail,
@@ -33,87 +36,82 @@ export function ApplicantProfile() {
   const [interviewTime, setInterviewTime] = useState("");
   const [interviewType, setInterviewType] = useState("video");
 
-  // Applicant data (in real app, this would be fetched based on id)
-  const applicant = {
-    id: 1,
-    name: "Alex Martinez",
-    email: "alex.martinez@email.com",
-    phone: "+1 (555) 123-4567",
-    location: "San Francisco, CA",
-    avatar: "AM",
-    jobTitle: "Senior Software Engineer",
-    jobId: 1,
-    department: "Engineering",
-    appliedDate: "2026-03-18",
-    status: "shortlisted",
-    experience: "7 years",
-    currentCompany: "Tech Solutions Inc.",
-    currentRole: "Software Engineer",
-    education: "BS Computer Science, Stanford University",
-    expectedSalary: "$140,000 - $160,000",
-    noticePeriod: "2 weeks",
-    rating: 4.5,
-    skills: ["JavaScript", "TypeScript", "React", "Node.js", "Python", "AWS", "Docker", "Kubernetes"],
-    coverLetter: `Dear Hiring Manager,
-
-I am writing to express my strong interest in the Senior Software Engineer position at your company. With over 7 years of experience in full-stack development and a proven track record of delivering high-quality software solutions, I am confident that I would be a valuable addition to your engineering team.
-
-In my current role at Tech Solutions Inc., I have successfully led the development of multiple large-scale web applications serving millions of users. I have extensive experience with modern JavaScript frameworks, particularly React and Node.js, and have architected several microservices-based systems deployed on AWS. My technical expertise is complemented by strong problem-solving skills and a passion for writing clean, maintainable code.
-
-What particularly excites me about this opportunity is your company's commitment to innovation and technical excellence. I have been following your recent product launches and am impressed by the scalability and user experience of your platform. I would love to contribute my skills and experience to help drive your product forward.
-
-Some of my key achievements include:
-• Led a team of 5 engineers in rebuilding our core platform, resulting in 40% performance improvement
-• Designed and implemented a real-time notification system handling 100k+ messages per second
-• Reduced deployment time by 60% through implementation of CI/CD pipelines
-• Mentored junior developers and conducted technical workshops on best practices
-
-I am particularly skilled in React, Node.js, and cloud technologies, which align well with your technology stack. I am also experienced in Agile methodologies and have successfully collaborated with cross-functional teams including product managers, designers, and QA engineers.
-
-I am excited about the possibility of bringing my technical skills, leadership experience, and passion for software engineering to your team. I would welcome the opportunity to discuss how my background and skills would benefit your organization.
-
-Thank you for considering my application. I look forward to speaking with you soon.
-
-Best regards,
-Alex Martinez`,
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [applicant, setApplicant] = useState({
+    id: 0,
+    name: "",
+    email: "",
+    phone: "",
+    location: "",
+    avatar: "",
+    jobTitle: "",
+    jobId: 0,
+    department: "",
+    appliedDate: "",
+    status: "new" as string,
+    experience: "",
+    currentCompany: "",
+    currentRole: "",
+    education: "",
+    expectedSalary: "",
+    noticePeriod: "",
+    rating: 0,
+    skills: [] as string[],
+    coverLetter: "",
     resumeHighlights: {
-      summary: "Experienced software engineer with 7+ years of full-stack development expertise. Proven track record of building scalable web applications and leading technical teams. Passionate about clean code, best practices, and continuous learning.",
-      experience: [
-        {
-          title: "Software Engineer",
-          company: "Tech Solutions Inc.",
-          period: "2022 - Present",
-          description: "Leading development of microservices-based platform serving 2M+ users. Mentoring junior developers and driving technical excellence.",
-          achievements: [
-            "Rebuilt core platform architecture, improving performance by 40%",
-            "Implemented real-time features using WebSockets and Redis",
-            "Led migration from monolith to microservices architecture",
-          ]
-        },
-        {
-          title: "Full Stack Developer",
-          company: "StartupXYZ",
-          period: "2019 - 2022",
-          description: "Developed customer-facing web applications using React, Node.js, and PostgreSQL. Collaborated with product and design teams.",
-          achievements: [
-            "Built responsive SPA serving 500k+ monthly active users",
-            "Reduced page load time by 50% through optimization",
-            "Implemented comprehensive testing suite with 90% coverage",
-          ]
-        },
-      ],
-      education: [
-        {
-          degree: "Bachelor of Science in Computer Science",
-          school: "Stanford University",
-          year: "2019",
-          gpa: "3.8/4.0"
-        }
-      ],
-      certifications: [
-        "AWS Certified Solutions Architect",
-        "MongoDB Certified Developer",
-      ]
+      summary: "",
+      experience: [] as { company: string; role: string; duration: string; highlights: string[] }[],
+      education: [] as { degree: string; school: string; year: string }[],
+    },
+  });
+
+  useEffect(() => {
+    if (!id) return;
+    void applicantsService
+      .get(Number(id))
+      .then((a: ApplicantRecord) => {
+        const name = a.name ?? `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim();
+        const parts = name.split(" ");
+        const avatar =
+          parts.length >= 2
+            ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+            : name.slice(0, 2).toUpperCase();
+        setApplicant({
+          id: a.id,
+          name,
+          email: a.email,
+          phone: a.phone ?? "—",
+          location: a.location ?? "—",
+          avatar,
+          jobTitle: a.jobTitle ?? "—",
+          jobId: a.jobId ?? 0,
+          department: a.department ?? "—",
+          appliedDate: a.appliedDate ?? "",
+          status: a.status,
+          experience: a.experience ?? "—",
+          currentCompany: "",
+          currentRole: "",
+          education: "",
+          expectedSalary: "",
+          noticePeriod: "",
+          rating: a.rating ?? 0,
+          skills: [],
+          coverLetter: a.coverLetter ?? "",
+          resumeHighlights: { summary: "", experience: [], education: [] },
+        });
+      })
+      .catch(() => setLoadError("Failed to load applicant"))
+      .finally(() => setLoading(false));
+  }, [id]);
+
+  const updateStatus = async (status: string) => {
+    if (!id) return;
+    try {
+      const updated = await applicantsService.update(Number(id), { status });
+      setApplicant((prev) => ({ ...prev, status: updated.status }));
+    } catch (e) {
+      alert(e instanceof ApiError ? e.message : "Failed to update status");
     }
   };
 

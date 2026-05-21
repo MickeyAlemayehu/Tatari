@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ApiAuthController;
 use App\Http\Controllers\ApplicantController;
+use App\Http\Controllers\CompensationController;
 use App\Http\Controllers\DepartmentController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\JobVacancyController;
@@ -63,6 +64,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
         Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
         Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
+        Route::get('/employees/{employee}/compensations', [CompensationController::class, 'forEmployee']);
 
         Route::get('/departments', [DepartmentController::class, 'index']);
         Route::post('/departments', [DepartmentController::class, 'store']);
@@ -103,6 +105,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/payroll/payslips/{payroll}', [PayrollController::class, 'payslip']);
 
     Route::middleware('employee.permission:5,manage_payroll')->group(function () {
+        Route::get('/compensations', [CompensationController::class, 'index']);
+        Route::post('/compensations', [CompensationController::class, 'store']);
+        Route::get('/compensations/{compensation}', [CompensationController::class, 'show']);
+        Route::patch('/compensations/{compensation}', [CompensationController::class, 'update']);
+        Route::delete('/compensations/{compensation}', [CompensationController::class, 'destroy']);
+
         Route::get('/payroll', [PayrollController::class, 'index']);
         Route::get('/payroll/summary', [PayrollController::class, 'summary']);
         Route::get('/payroll/period', [PayrollController::class, 'period']);

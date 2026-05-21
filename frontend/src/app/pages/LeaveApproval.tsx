@@ -1,136 +1,44 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Check, X, Eye, Calendar, AlertCircle, CheckCircle } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
-
-interface LeaveRequest {
-  id: number;
-  employee: {
-    name: string;
-    position: string;
-    department: string;
-    avatar: string;
-  };
-  type: string;
-  startDate: string;
-  endDate: string;
-  days: number;
-  reason: string;
-  appliedDate: string;
-  status: "pending" | "approved" | "rejected";
-}
+import { leaveService } from "../../services/leave.service";
+import { mapPendingItem, type PendingLeaveRequest } from "../../lib/leave-mappers";
+import { ApiError } from "../../lib/api";
+import { AsyncState } from "../components/AsyncState";
 
 export function LeaveApproval() {
   const navigate = useNavigate();
-  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<PendingLeaveRequest | null>(null);
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectError, setRejectError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
   const [actionStatus, setActionStatus] = useState<{
     show: boolean;
     type: "approve" | "reject";
     message: string;
   } | null>(null);
 
-  const [pendingRequests, setPendingRequests] = useState<LeaveRequest[]>([
-    {
-      id: 1,
-      employee: {
-        name: "Emily Davis",
-        position: "Marketing Specialist",
-        department: "Marketing",
-        avatar: "ED",
-      },
-      type: "Annual Leave",
-      startDate: "2026-04-01",
-      endDate: "2026-04-03",
-      days: 3,
-      reason: "Personal matters to attend to. Planning a short trip with family.",
-      appliedDate: "2026-03-20",
-      status: "pending",
-    },
-    {
-      id: 2,
-      employee: {
-        name: "David Martinez",
-        position: "Senior Developer",
-        department: "Engineering",
-        avatar: "DM",
-      },
-      type: "Annual Leave",
-      startDate: "2026-05-10",
-      endDate: "2026-05-17",
-      days: 8,
-      reason: "International travel and vacation. Booked flights and accommodation for a week-long trip.",
-      appliedDate: "2026-03-15",
-      status: "pending",
-    },
-    {
-      id: 3,
-      employee: {
-        name: "Robert Brown",
-        position: "Product Designer",
-        department: "Design",
-        avatar: "RB",
-      },
-      type: "Personal Leave",
-      startDate: "2026-04-05",
-      endDate: "2026-04-05",
-      days: 1,
-      reason: "Attending a personal event - family celebration.",
-      appliedDate: "2026-03-19",
-      status: "pending",
-    },
-    {
-      id: 4,
-      employee: {
-        name: "Jennifer Taylor",
-        position: "HR Manager",
-        department: "Human Resources",
-        avatar: "JT",
-      },
-      type: "Sick Leave",
-      startDate: "2026-03-28",
-      endDate: "2026-03-29",
-      days: 2,
-      reason: "Medical appointment and follow-up consultation with specialist.",
-      appliedDate: "2026-03-22",
-      status: "pending",
-    },
-    {
-      id: 5,
-      employee: {
-        name: "Alex Johnson",
-        position: "Sales Representative",
-        department: "Sales",
-        avatar: "AJ",
-      },
-      type: "Annual Leave",
-      startDate: "2026-04-20",
-      endDate: "2026-04-24",
-      days: 5,
-      reason: "Taking time off for rest and relaxation. Planning to spend time with family.",
-      appliedDate: "2026-03-18",
-      status: "pending",
-    },
-    {
-      id: 6,
-      employee: {
-        name: "Michelle Chen",
-        position: "Content Writer",
-        department: "Marketing",
-        avatar: "MC",
-      },
-      type: "Personal Leave",
-      startDate: "2026-04-12",
-      endDate: "2026-04-14",
-      days: 3,
-      reason: "Moving to a new apartment and need time to settle in.",
-      appliedDate: "2026-03-17",
-      status: "pending",
-    },
-  ]);
+  const [pendingRequests, setPendingRequests] = useState<PendingLeaveRequest[]>([]);
+
+  const loadPending = () => {
+    setLoading(true);
+    leaveService
+      .list({ status: "pending", per_page: 100 })
+      .then((res) => setPendingRequests(res.data.map(mapPendingItem)))
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load pending requests.")
+      )
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadPending();
+  }, []);
 
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -143,61 +51,58 @@ export function LeaveApproval() {
   };
 
   const handleApprove = async () => {
-    if (!selectedRequest) return;
-
-    // Update request status
-    setPendingRequests((prev) =>
-      prev.filter((req) => req.id !== selectedRequest.id)
-    );
-
-    // Show success message
-    setActionStatus({
-      show: true,
-      type: "approve",
-      message: `Leave request for ${selectedRequest.employee.name} has been approved`,
-    });
-
-    // Clear selection after delay
-    setTimeout(() => {
-      setSelectedRequest(null);
-      setActionStatus(null);
-    }, 2000);
+    if (!selectedRequest || processing) return;
+    setProcessing(true);
+    try {
+      await leaveService.approve(selectedRequest.id);
+      setPendingRequests((prev) => prev.filter((req) => req.id !== selectedRequest.id));
+      setActionStatus({
+        show: true,
+        type: "approve",
+        message: `Leave request for ${selectedRequest.employee.name} has been approved`,
+      });
+      setTimeout(() => {
+        setSelectedRequest(null);
+        setActionStatus(null);
+      }, 2000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to approve request.");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleReject = async () => {
-    if (!selectedRequest) return;
-
-    // Validate reject reason
+    if (!selectedRequest || processing) return;
     if (!rejectReason.trim()) {
       setRejectError("Please provide a reason for rejection");
       return;
     }
-
     if (rejectReason.trim().length < 10) {
       setRejectError("Reason must be at least 10 characters");
       return;
     }
-
-    // Update request status
-    setPendingRequests((prev) =>
-      prev.filter((req) => req.id !== selectedRequest.id)
-    );
-
-    // Show success message
-    setActionStatus({
-      show: true,
-      type: "reject",
-      message: `Leave request for ${selectedRequest.employee.name} has been rejected`,
-    });
-
-    // Reset states after delay
-    setTimeout(() => {
-      setSelectedRequest(null);
-      setShowRejectInput(false);
-      setRejectReason("");
-      setRejectError("");
-      setActionStatus(null);
-    }, 2000);
+    setProcessing(true);
+    try {
+      await leaveService.reject(selectedRequest.id, rejectReason.trim());
+      setPendingRequests((prev) => prev.filter((req) => req.id !== selectedRequest.id));
+      setActionStatus({
+        show: true,
+        type: "reject",
+        message: `Leave request for ${selectedRequest.employee.name} has been rejected`,
+      });
+      setTimeout(() => {
+        setSelectedRequest(null);
+        setShowRejectInput(false);
+        setRejectReason("");
+        setRejectError("");
+        setActionStatus(null);
+      }, 2000);
+    } catch (err) {
+      setRejectError(err instanceof ApiError ? err.message : "Failed to reject request.");
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const handleRejectClick = () => {

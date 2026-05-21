@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Save, Plus, Trash2, AlertCircle, CheckCircle, Percent, Info } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { performanceService } from "../../services/performance.service";
+import { ApiError } from "../../lib/api";
 
 interface WeightCriteria {
   id: string;
@@ -144,25 +146,23 @@ export function CreateEvaluationPeriod() {
     }
 
     setIsSubmitting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    setIsSubmitting(false);
-    setShowSuccess(true);
-
-    // Log form data (in a real app, this would be sent to an API)
-    console.log("Evaluation Period:", {
-      name,
-      startDate,
-      endDate,
-      weights,
-    });
-
-    // Show success message and redirect after 2 seconds
-    setTimeout(() => {
-      navigate("/performance");
-    }, 2000);
+    try {
+      await performanceService.createPeriod({
+        name: name.trim(),
+        start_date: startDate,
+        end_date: endDate,
+        status: "active",
+      });
+      setShowSuccess(true);
+      setTimeout(() => navigate("/performance"), 1500);
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        name: err instanceof ApiError ? err.message : "Failed to create evaluation period.",
+      }));
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Clear error when user starts typing

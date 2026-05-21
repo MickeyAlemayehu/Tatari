@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Search, Bell, Menu, X } from "lucide-react";
+import { Search, Bell, Menu } from "lucide-react";
+import { notificationsService } from "../../services/notifications.service";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface AppHeaderProps {
   title?: string;
@@ -18,7 +20,16 @@ export function AppHeader({
   actions,
 }: AppHeaderProps) {
   const navigate = useNavigate();
-  const [notificationCount] = useState(3);
+  const { isAuthenticated, employee } = useAuth();
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    notificationsService
+      .unreadCount()
+      .then((res) => setNotificationCount(res.unreadCount))
+      .catch(() => setNotificationCount(0));
+  }, [isAuthenticated]);
 
   return (
     <header className="bg-white border-b border-[#E5E7EB] px-4 lg:px-6 py-4">
@@ -81,11 +92,15 @@ export function AppHeader({
             className="flex items-center gap-2 p-1.5 hover:bg-[#F9FAFB] rounded-lg transition"
           >
             <div className="w-8 h-8 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center text-white text-sm">
-              JD
+              {employee
+                ? `${employee.first_name.charAt(0)}${employee.last_name.charAt(0)}`
+                : "?"}
             </div>
             <div className="hidden lg:block text-left">
-              <p className="text-sm text-[#111827]">John Doe</p>
-              <p className="text-xs text-[#6B7280]">HR Manager</p>
+              <p className="text-sm text-[#111827]">
+                {employee ? `${employee.first_name} ${employee.last_name}` : "User"}
+              </p>
+              <p className="text-xs text-[#6B7280]">{employee?.position ?? "—"}</p>
             </div>
           </button>
         </div>

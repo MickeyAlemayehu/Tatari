@@ -1,14 +1,21 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Send, AlertCircle, CheckCircle, Calendar } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { leaveService, type LeaveTypeRecord } from "../../services/leave.service";
+import { ApiError } from "../../lib/api";
 
 export function LeaveRequest() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveTypeRecord[]>([]);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  // Form fields
+  useEffect(() => {
+    leaveService.types().then((res) => setLeaveTypes(res.data)).catch(() => {});
+  }, []);
+
   const [leaveType, setLeaveType] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -89,26 +96,23 @@ export function LeaveRequest() {
     }
 
     setIsSubmitting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    setIsSubmitting(false);
-    setShowSuccess(true);
-
-    // Log form data (in a real app, this would be sent to an API)
-    console.log("Leave Request:", {
-      leaveType,
-      startDate,
-      endDate,
-      reason,
-      days: calculateDays(),
-    });
-
-    // Show success message and redirect after 2 seconds
-    setTimeout(() => {
-      navigate("/dashboard");
-    }, 2000);
+    setSubmitError(null);
+    try {
+      const selected = leaveTypes.find((t) => t.name === leaveType);
+      await leaveService.create({
+        leave_type_id: selected?.id,
+        type: leaveType,
+        start_date: startDate,
+        end_date: endDate,
+        reason: reason.trim(),
+      });
+      setShowSuccess(true);
+      setTimeout(() => navigate("/employee/leave"), 1500);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Failed to submit leave request.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Clear error when user starts typing
@@ -190,14 +194,18 @@ export function LeaveRequest() {
                     }`}
                   >
                     <option value="">Select leave type</option>
-                    <option value="annual">Annual Leave</option>
-                    <option value="sick">Sick Leave</option>
-                    <option value="personal">Personal Leave</option>
-                    <option value="maternity">Maternity Leave</option>
-                    <option value="paternity">Paternity Leave</option>
-                    <option value="unpaid">Unpaid Leave</option>
-                    <option value="other">Other</option>
+                    {leaveTypes.map((t) => (
+                      <option key={t.id} value={t.name}>
+                        {t.name}
+                      </option>
+                    ))}
                   </select>
+                  {submitError && (
+                    <div className="mt-2 flex items-center gap-1 text-[#EF4444]">
+                      <AlertCircle className="w-4 h-4" />
+                      <p className="text-sm">{submitError}</p>
+                    </div>
+                  )}
                   {errors.leaveType && (
                     <div className="mt-2 flex items-center gap-1 text-[#EF4444]">
                       <AlertCircle className="w-4 h-4" />

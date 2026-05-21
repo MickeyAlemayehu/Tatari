@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Search, MapPin, Briefcase, Clock, DollarSign, ChevronRight, Building, Users, Award, TrendingUp } from "lucide-react";
+import { jobsService, type JobRecord } from "../../services/jobs.service";
 
 interface Job {
   id: number;
@@ -23,113 +24,32 @@ export function PublicJobListing() {
   const [filterLocation, setFilterLocation] = useState<string>("all");
   const [filterType, setFilterType] = useState<string>("all");
 
-  // Jobs data
-  const [jobs] = useState<Job[]>([
-    {
-      id: 1,
-      title: "Senior Software Engineer",
-      department: "Engineering",
-      location: "San Francisco, CA",
-      type: "Full-time",
-      experience: "5+ years",
-      salary: "$140,000 - $180,000",
-      postedDate: "2026-03-15",
-      description: "We're looking for an experienced software engineer to join our growing team and help build scalable web applications.",
-      requirements: ["5+ years of experience", "React & Node.js expertise", "Strong problem-solving skills"],
-      tags: ["React", "Node.js", "AWS", "TypeScript"],
-    },
-    {
-      id: 2,
-      title: "Product Designer",
-      department: "Design",
-      location: "Remote",
-      type: "Full-time",
-      experience: "3+ years",
-      salary: "$100,000 - $130,000",
-      postedDate: "2026-03-14",
-      description: "Join our design team to create beautiful and intuitive user experiences for our products.",
-      requirements: ["3+ years of UX/UI design", "Figma proficiency", "Portfolio required"],
-      tags: ["Figma", "UI/UX", "User Research", "Prototyping"],
-    },
-    {
-      id: 3,
-      title: "Marketing Manager",
-      department: "Marketing",
-      location: "New York, NY",
-      type: "Full-time",
-      experience: "4+ years",
-      salary: "$90,000 - $120,000",
-      postedDate: "2026-03-13",
-      description: "Lead our marketing efforts and develop strategies to grow our brand and customer base.",
-      requirements: ["4+ years in marketing", "Digital marketing expertise", "Team leadership experience"],
-      tags: ["Digital Marketing", "SEO", "Analytics", "Content Strategy"],
-    },
-    {
-      id: 4,
-      title: "HR Coordinator",
-      department: "Human Resources",
-      location: "San Francisco, CA",
-      type: "Full-time",
-      experience: "2+ years",
-      salary: "$60,000 - $75,000",
-      postedDate: "2026-03-12",
-      description: "Support our HR team in recruiting, onboarding, and employee relations activities.",
-      requirements: ["2+ years HR experience", "HRIS knowledge", "Excellent communication"],
-      tags: ["Recruiting", "HRIS", "Employee Relations", "Onboarding"],
-    },
-    {
-      id: 5,
-      title: "Data Analyst",
-      department: "Engineering",
-      location: "Remote",
-      type: "Full-time",
-      experience: "3+ years",
-      salary: "$85,000 - $110,000",
-      postedDate: "2026-03-10",
-      description: "Analyze data to provide insights that drive business decisions and product improvements.",
-      requirements: ["3+ years of data analysis", "SQL & Python skills", "Statistics knowledge"],
-      tags: ["SQL", "Python", "Tableau", "Statistics"],
-    },
-    {
-      id: 6,
-      title: "Frontend Developer Intern",
-      department: "Engineering",
-      location: "San Francisco, CA",
-      type: "Internship",
-      experience: "Student",
-      salary: "$25 - $35/hour",
-      postedDate: "2026-03-08",
-      description: "Gain hands-on experience building modern web applications with our engineering team.",
-      requirements: ["Enrolled in CS program", "JavaScript knowledge", "Eager to learn"],
-      tags: ["React", "JavaScript", "HTML/CSS", "Git"],
-    },
-    {
-      id: 7,
-      title: "Sales Representative",
-      department: "Sales",
-      location: "Boston, MA",
-      type: "Full-time",
-      experience: "2+ years",
-      salary: "$70,000 - $90,000 + Commission",
-      postedDate: "2026-03-05",
-      description: "Drive revenue growth by building relationships with clients and closing deals.",
-      requirements: ["2+ years sales experience", "Excellent communication", "Self-motivated"],
-      tags: ["B2B Sales", "CRM", "Negotiation", "Client Relations"],
-    },
-    {
-      id: 8,
-      title: "DevOps Engineer",
-      department: "Engineering",
-      location: "Remote",
-      type: "Contract",
-      experience: "4+ years",
-      salary: "$120,000 - $150,000",
-      postedDate: "2026-03-03",
-      description: "Manage and optimize our cloud infrastructure and deployment pipelines.",
-      requirements: ["4+ years DevOps experience", "AWS/GCP expertise", "CI/CD knowledge"],
-      tags: ["AWS", "Docker", "Kubernetes", "Terraform"],
-    },
-  ]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    jobsService
+      .publicList()
+      .then((res) => {
+        setJobs(
+          res.data.map((j: JobRecord) => ({
+            id: j.id,
+            title: j.title,
+            department: j.department ?? "General",
+            location: j.location ?? "Remote",
+            type: (j.type as Job["type"]) ?? "Full-time",
+            experience: "See details",
+            salary: j.salary ?? "Competitive",
+            postedDate: j.postedDate ?? "",
+            description: j.description ?? "",
+            requirements: j.requirements ?? [],
+            tags: j.requirements?.slice(0, 4) ?? [],
+          }))
+        );
+      })
+      .catch(() => setJobs([]))
+      .finally(() => setLoading(false));
+  }, []);
 
   // Get unique values for filters
   const departments = Array.from(new Set(jobs.map(j => j.department)));

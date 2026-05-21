@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Calendar, Users, DollarSign, CheckCircle, AlertCircle, RefreshCw, FileText, Clock, Info } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { payrollService, type PayrollRecord } from "../../services/payroll.service";
+import { ApiError } from "../../lib/api";
 
 interface Employee {
   id: number;
@@ -31,70 +33,21 @@ export function PayrollGeneration() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isGenerated, setIsGenerated] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [generateError, setGenerateError] = useState<string | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
-  // Employee data
-  const [employees] = useState<Employee[]>([
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      employeeId: "EMP001",
-      department: "Engineering",
-      position: "Senior Software Engineer",
-      baseSalary: 8500,
-      allowances: 500,
-      deductions: 900,
-      netPay: 8100,
-      status: "active",
-    },
-    {
-      id: 2,
-      name: "Michael Chen",
-      employeeId: "EMP002",
-      department: "Engineering",
-      position: "Frontend Developer",
-      baseSalary: 7000,
-      allowances: 400,
-      deductions: 740,
-      netPay: 6660,
-      status: "active",
-    },
-    {
-      id: 3,
-      name: "Emily Davis",
-      employeeId: "EMP003",
-      department: "Marketing",
-      position: "Marketing Manager",
-      baseSalary: 7500,
-      allowances: 450,
-      deductions: 795,
-      netPay: 7155,
-      status: "active",
-    },
-    {
-      id: 4,
-      name: "David Wilson",
-      employeeId: "EMP004",
-      department: "Sales",
-      position: "Sales Director",
-      baseSalary: 9000,
-      allowances: 600,
-      deductions: 960,
-      netPay: 8640,
-      status: "active",
-    },
-    {
-      id: 5,
-      name: "Jessica Martinez",
-      employeeId: "EMP005",
-      department: "HR",
-      position: "HR Manager",
-      baseSalary: 7200,
-      allowances: 420,
-      deductions: 762,
-      netPay: 6858,
-      status: "on_leave",
-    },
-  ]);
+  const mapPayrollRow = (row: PayrollRecord): Employee => ({
+    id: row.id,
+    name: row.employeeName ?? row.employee?.name ?? "Employee",
+    employeeId: row.employeeId ?? `EMP${row.id}`,
+    department: row.department ?? row.employee?.department ?? "—",
+    position: row.position ?? row.employee?.position ?? "—",
+    baseSalary: row.baseSalary ?? 0,
+    allowances: (row.allowances?.housing ?? 0) + (row.allowances?.transport ?? 0) + (row.allowances?.meal ?? 0),
+    deductions: row.totalDeductions ?? 0,
+    netPay: row.netPay ?? row.net_salary ?? 0,
+    status: "active",
+  });
 
   // Calculate totals
   const activeEmployees = employees.filter(e => e.status === "active");
@@ -139,16 +92,25 @@ export function PayrollGeneration() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Handle generate
-  const handleGenerate = () => {
-    if (validateForm()) {
-      setIsGenerating(true);
-      
-      // Simulate generation process
-      setTimeout(() => {
-        setIsGenerating(false);
-        setIsGenerated(true);
-      }, 2000);
+  const handleGenerate = async () => {
+    if (!validateForm()) return;
+    setIsGenerating(true);
+    setGenerateError(null);
+    try {
+      const start = new Date(startDate);
+      const res = await payrollService.generate({
+        year: start.getFullYear(),
+        month: start.getMonth() + 1,
+        include_bonuses: includeBonuses,
+        include_allowances: includeAllowances,
+        auto_deductions: autoDeductions,
+      });
+      setEmployees(res.data.map(mapPayrollRow));
+      setIsGenerated(true);
+    } catch (e) {
+      setGenerateError(e instanceof ApiError ? e.message : "Failed to generate payroll");
+    } finally {
+      setIsGenerating(false);
     }
   };
 

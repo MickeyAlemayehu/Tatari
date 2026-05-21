@@ -1,7 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { ArrowLeft, Save, AlertCircle, CheckCircle } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { employeesService } from "../../services/employees.service";
+import { departmentsService, type DepartmentRecord } from "../../services/departments.service";
+import { ApiError } from "../../lib/api";
+import { splitFullName } from "../../lib/utils";
 
 export function CreateEmployee() {
   const navigate = useNavigate();
@@ -14,6 +18,12 @@ export function CreateEmployee() {
   const [department, setDepartment] = useState("");
   const [role, setRole] = useState("");
   const [status, setStatus] = useState("active");
+  const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
+  const [submitError, setSubmitError] = useState("");
+
+  useEffect(() => {
+    departmentsService.list().then((res) => setDepartments(res.data)).catch(() => {});
+  }, []);
 
   // Validation errors
   const [errors, setErrors] = useState({
@@ -81,26 +91,28 @@ export function CreateEmployee() {
     }
 
     setIsSubmitting(true);
+    setSubmitError("");
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-
-    setIsSubmitting(false);
-    setShowSuccess(true);
-
-    // Log form data (in a real app, this would be sent to an API)
-    console.log("New Employee:", {
-      fullName,
-      email,
-      department,
-      role,
-      status,
-    });
-
-    // Show success message and redirect after 2 seconds
-    setTimeout(() => {
-      navigate("/employees");
-    }, 2000);
+    try {
+      const { first_name, last_name } = splitFullName(fullName);
+      const dept = departments.find((d) => String(d.id) === department || d.name === department);
+      await employeesService.create({
+        first_name,
+        last_name,
+        email: email.trim(),
+        password: "Password123!",
+        position: role.trim(),
+        department_id: dept?.id,
+        permission_level: 3,
+        status: status === "inactive" ? "inactive" : "active",
+      });
+      setShowSuccess(true);
+      setTimeout(() => navigate("/employees"), 2000);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Failed to create employee.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Clear error when user starts typing
@@ -149,6 +161,11 @@ export function CreateEmployee() {
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-2xl mx-auto">
             {/* Success Message */}
+            {submitError && (
+              <div className="mb-6 p-4 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg text-sm text-[#EF4444]">
+                {submitError}
+              </div>
+            )}
             {showSuccess && (
               <div className="mb-6 p-4 bg-[#DCFCE7] border border-green-200 rounded-lg flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-[#22C55E] mt-0.5 flex-shrink-0" />
@@ -230,14 +247,11 @@ export function CreateEmployee() {
                     }`}
                   >
                     <option value="">Select a department</option>
-                    <option value="Engineering">Engineering</option>
-                    <option value="Product">Product</option>
-                    <option value="Design">Design</option>
-                    <option value="Human Resources">Human Resources</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Sales">Sales</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Operations">Operations</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={String(d.id)}>
+                        {d.name}
+                      </option>
+                    ))}
                   </select>
                   {errors.department && (
                     <div className="mt-2 flex items-center gap-1 text-[#EF4444]">

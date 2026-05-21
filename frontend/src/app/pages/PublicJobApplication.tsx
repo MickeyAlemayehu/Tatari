@@ -1,11 +1,18 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
 import { ArrowLeft, Upload, FileText, CheckCircle, AlertCircle, X } from "lucide-react";
+import { jobsService } from "../../services/jobs.service";
+import { applicantsService } from "../../services/applicants.service";
+import { ApiError } from "../../lib/api";
+import { AsyncState } from "../components/AsyncState";
 
 export function PublicJobApplication() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -20,14 +27,30 @@ export function PublicJobApplication() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isDragging, setIsDragging] = useState(false);
 
-  // Job data (in real app, this would be fetched based on id)
-  const job = {
-    id: 1,
-    title: "Senior Software Engineer",
-    department: "Engineering",
-    location: "San Francisco, CA",
-    type: "Full-time",
-  };
+  const [job, setJob] = useState({
+    id: 0,
+    title: "",
+    department: "",
+    location: "",
+    type: "",
+  });
+
+  useEffect(() => {
+    if (!id) return;
+    void jobsService
+      .publicGet(Number(id))
+      .then((j) =>
+        setJob({
+          id: j.id,
+          title: j.title,
+          department: j.department ?? "",
+          location: j.location ?? "",
+          type: j.type ?? j.employment_type ?? "",
+        })
+      )
+      .catch(() => setLoadError("Failed to load job"))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   // Handle input change
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
@@ -115,12 +138,28 @@ export function PublicJobApplication() {
   };
 
   // Handle submit
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!validateForm() || !id) return;
 
-    if (validateForm()) {
-      console.log("Form submitted:", { formData, resumeFile });
+    setIsSubmitting(true);
+    try {
+      const body = new FormData();
+      body.append("firstName", formData.firstName.trim());
+      body.append("lastName", formData.lastName.trim());
+      body.append("email", formData.email.trim());
+      body.append("phone", formData.phone.trim());
+      body.append("coverLetter", formData.coverLetter.trim());
+      if (resumeFile) body.append("resume", resumeFile);
+      await applicantsService.apply(Number(id), body);
       setIsSubmitted(true);
+    } catch (err) {
+      setErrors((prev) => ({
+        ...prev,
+        submit: err instanceof ApiError ? err.message : "Failed to submit application",
+      }));
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

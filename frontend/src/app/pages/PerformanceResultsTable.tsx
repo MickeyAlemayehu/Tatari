@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
+import { performanceService, type PerformanceSummaryRecord } from "../../services/performance.service";
+import { ApiError } from "../../lib/api";
+import { initials } from "../../lib/utils";
+import { AsyncState } from "../components/AsyncState";
 import {
   ArrowLeft,
   Search,
@@ -27,135 +31,42 @@ interface EmployeeResult {
   status: "completed" | "in-progress" | "pending";
 }
 
+function mapResult(r: PerformanceSummaryRecord): EmployeeResult {
+  const parts = (r.employeeName ?? "").split(" ");
+  const first = parts[0] ?? "";
+  const last = parts.slice(1).join(" ") || first;
+  return {
+    id: r.employee_id,
+    name: r.employeeName ?? "Unknown",
+    position: r.position ?? "—",
+    department: r.department ?? "—",
+    avatar: initials(first, last),
+    selfScore: r.selfScore,
+    peerScore: r.peerScore,
+    managerScore: r.managerScore,
+    finalScore: r.finalScore,
+    status: r.status === "completed" ? "completed" : r.status === "in-progress" ? "in-progress" : "pending",
+  };
+}
+
 export function PerformanceResultsTable() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
+  const [employeeResults, setEmployeeResults] = useState<EmployeeResult[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Company-wide performance results
-  const employeeResults: EmployeeResult[] = [
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      position: "Marketing Specialist",
-      department: "Marketing",
-      avatar: "SJ",
-      selfScore: 4.0,
-      peerScore: 4.3,
-      managerScore: 4.3,
-      finalScore: 4.2,
-      status: "completed",
-    },
-    {
-      id: 2,
-      name: "Michael Chen",
-      position: "Senior Developer",
-      department: "Engineering",
-      avatar: "MC",
-      selfScore: 4.5,
-      peerScore: 4.7,
-      managerScore: 4.6,
-      finalScore: 4.6,
-      status: "completed",
-    },
-    {
-      id: 3,
-      name: "Emily Davis",
-      position: "Product Designer",
-      department: "Design",
-      avatar: "ED",
-      selfScore: 4.2,
-      peerScore: 4.4,
-      managerScore: 4.5,
-      finalScore: 4.4,
-      status: "completed",
-    },
-    {
-      id: 4,
-      name: "James Wilson",
-      position: "Sales Manager",
-      department: "Sales",
-      avatar: "JW",
-      selfScore: 3.8,
-      peerScore: 4.0,
-      managerScore: 4.1,
-      finalScore: 4.0,
-      status: "completed",
-    },
-    {
-      id: 5,
-      name: "Lisa Anderson",
-      position: "HR Coordinator",
-      department: "Human Resources",
-      avatar: "LA",
-      selfScore: 4.3,
-      peerScore: 4.5,
-      managerScore: 4.4,
-      finalScore: 4.4,
-      status: "completed",
-    },
-    {
-      id: 6,
-      name: "David Martinez",
-      position: "Backend Developer",
-      department: "Engineering",
-      avatar: "DM",
-      selfScore: 4.0,
-      peerScore: 4.2,
-      managerScore: 4.0,
-      finalScore: 4.1,
-      status: "in-progress",
-    },
-    {
-      id: 7,
-      name: "Jennifer Taylor",
-      position: "Content Writer",
-      department: "Marketing",
-      avatar: "JT",
-      selfScore: 3.9,
-      peerScore: 4.1,
-      managerScore: 4.2,
-      finalScore: 4.1,
-      status: "completed",
-    },
-    {
-      id: 8,
-      name: "Robert Brown",
-      position: "Product Manager",
-      department: "Product",
-      avatar: "RB",
-      selfScore: 4.4,
-      peerScore: 4.6,
-      managerScore: 4.5,
-      finalScore: 4.5,
-      status: "completed",
-    },
-    {
-      id: 9,
-      name: "Amanda White",
-      position: "UI Designer",
-      department: "Design",
-      avatar: "AW",
-      selfScore: 0,
-      peerScore: 0,
-      managerScore: 0,
-      finalScore: 0,
-      status: "pending",
-    },
-    {
-      id: 10,
-      name: "Chris Taylor",
-      position: "Frontend Developer",
-      department: "Engineering",
-      avatar: "CT",
-      selfScore: 4.1,
-      peerScore: 0,
-      managerScore: 4.3,
-      finalScore: 0,
-      status: "in-progress",
-    },
-  ];
+  useEffect(() => {
+    performanceService
+      .results()
+      .then((res) => setEmployeeResults(res.data.map(mapResult)))
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load results.")
+      )
+      .finally(() => setLoading(false));
+  }, []);
 
   // Filter results
   const filteredResults = employeeResults.filter((result) => {

@@ -1,140 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Calendar, Filter, Download, Eye, Search } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
-
-interface LeaveRequest {
-  id: number;
-  employee: string;
-  type: string;
-  startDate: string;
-  endDate: string;
-  days: number;
-  reason: string;
-  status: "pending" | "approved" | "rejected";
-  appliedDate: string;
-}
+import { leaveService } from "../../services/leave.service";
+import { mapHistoryItem, type LeaveHistoryItem } from "../../lib/leave-mappers";
+import { ApiError } from "../../lib/api";
+import { AsyncState } from "../components/AsyncState";
 
 export function LeaveHistory() {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [selectedRequest, setSelectedRequest] = useState<LeaveRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<LeaveHistoryItem | null>(null);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveHistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const leaveRequests: LeaveRequest[] = [
-    {
-      id: 1,
-      employee: "Sarah Johnson",
-      type: "Annual Leave",
-      startDate: "2026-04-15",
-      endDate: "2026-04-19",
-      days: 5,
-      reason: "Family vacation to the beach",
-      status: "approved",
-      appliedDate: "2026-03-10",
-    },
-    {
-      id: 2,
-      employee: "Michael Chen",
-      type: "Sick Leave",
-      startDate: "2026-03-25",
-      endDate: "2026-03-26",
-      days: 2,
-      reason: "Medical appointment and recovery",
-      status: "approved",
-      appliedDate: "2026-03-24",
-    },
-    {
-      id: 3,
-      employee: "Emily Davis",
-      type: "Personal Leave",
-      startDate: "2026-04-01",
-      endDate: "2026-04-03",
-      days: 3,
-      reason: "Personal matters to attend to",
-      status: "pending",
-      appliedDate: "2026-03-20",
-    },
-    {
-      id: 4,
-      employee: "James Wilson",
-      type: "Annual Leave",
-      startDate: "2026-03-28",
-      endDate: "2026-03-30",
-      days: 3,
-      reason: "Weekend getaway with family",
-      status: "rejected",
-      appliedDate: "2026-03-18",
-    },
-    {
-      id: 5,
-      employee: "Lisa Anderson",
-      type: "Sick Leave",
-      startDate: "2026-03-22",
-      endDate: "2026-03-22",
-      days: 1,
-      reason: "Flu symptoms and doctor consultation",
-      status: "approved",
-      appliedDate: "2026-03-21",
-    },
-    {
-      id: 6,
-      employee: "David Martinez",
-      type: "Annual Leave",
-      startDate: "2026-05-10",
-      endDate: "2026-05-17",
-      days: 8,
-      reason: "International travel and vacation",
-      status: "pending",
-      appliedDate: "2026-03-15",
-    },
-    {
-      id: 7,
-      employee: "Jessica Lee",
-      type: "Maternity Leave",
-      startDate: "2026-06-01",
-      endDate: "2026-08-31",
-      days: 92,
-      reason: "Maternity leave for childbirth",
-      status: "approved",
-      appliedDate: "2026-02-01",
-    },
-    {
-      id: 8,
-      employee: "Robert Brown",
-      type: "Personal Leave",
-      startDate: "2026-04-05",
-      endDate: "2026-04-05",
-      days: 1,
-      reason: "Attending a personal event",
-      status: "pending",
-      appliedDate: "2026-03-19",
-    },
-    {
-      id: 9,
-      employee: "Amanda White",
-      type: "Annual Leave",
-      startDate: "2026-03-15",
-      endDate: "2026-03-16",
-      days: 2,
-      reason: "Short break for rest",
-      status: "approved",
-      appliedDate: "2026-03-05",
-    },
-    {
-      id: 10,
-      employee: "Chris Taylor",
-      type: "Sick Leave",
-      startDate: "2026-04-08",
-      endDate: "2026-04-10",
-      days: 3,
-      reason: "Surgery recovery period",
-      status: "rejected",
-      appliedDate: "2026-03-12",
-    },
-  ];
+  useEffect(() => {
+    leaveService
+      .list({ per_page: 200 })
+      .then((res) => setLeaveRequests(res.data.map(mapHistoryItem)))
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load leave history.")
+      )
+      .finally(() => setLoading(false));
+  }, []);
 
   // Filter logic
   const filteredRequests = leaveRequests.filter((request) => {
@@ -181,6 +73,7 @@ export function LeaveHistory() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          <AsyncState loading={loading} error={error} empty={!loading && leaveRequests.length === 0} emptyMessage="No leave requests found.">
           {/* Statistics */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
             <div className="bg-white rounded-xl p-4 border border-[#E5E7EB]">
@@ -382,6 +275,7 @@ export function LeaveHistory() {
               </p>
             </div>
           </div>
+          </AsyncState>
         </main>
       </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
@@ -13,6 +13,10 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { performanceService, type EvaluationAssignmentRecord } from "../../services/performance.service";
+import { ApiError } from "../../lib/api";
+import { buildEvaluationPayload } from "../../lib/evaluation-submit";
+import { findAssignment } from "../../lib/evaluation-helpers";
 
 interface Question {
   id: number;
@@ -35,35 +39,47 @@ export function EmployeeEvaluationForm() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [answers, setAnswers] = useState<Answer[]>([]);
   const [errors, setErrors] = useState<{ [key: number]: string }>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [assignment, setAssignment] = useState<EvaluationAssignmentRecord | null>(null);
 
-  // Get evaluation details based on type
+  useEffect(() => {
+    if (!id) return;
+    performanceService
+      .myAssignments()
+      .then((res) => setAssignment(findAssignment(res.data, id) ?? null))
+      .catch(() => {});
+  }, [id]);
+
   const getEvaluationDetails = () => {
+    const emp = assignment?.employee;
+    const periodName =
+      typeof assignment?.period === "object" ? assignment.period?.name : assignment?.period;
     switch (type) {
       case "self":
         return {
           title: "Self Evaluation",
           icon: User,
           color: "bg-blue-100 text-blue-600",
-          targetName: "Myself",
-          targetPosition: "Software Engineer",
-          description: "Evaluate your own performance for Q1 2026",
+          targetName: emp?.name ?? "Myself",
+          targetPosition: emp?.position ?? "—",
+          description: `Evaluate your own performance${periodName ? ` for ${periodName}` : ""}`,
         };
       case "peer":
         return {
           title: "Peer Evaluation",
           icon: Users,
           color: "bg-[#DCFCE7] text-[#22C55E]",
-          targetName: id === "2" ? "Sarah Johnson" : "Michael Chen",
-          targetPosition: id === "2" ? "Marketing Specialist" : "Senior Developer",
-          description: `Provide feedback on your peer's performance`,
+          targetName: emp?.name ?? "Peer",
+          targetPosition: emp?.position ?? "—",
+          description: "Provide feedback on your peer's performance",
         };
       case "manager":
         return {
           title: "Manager Evaluation",
           icon: Briefcase,
           color: "bg-[#EEF2FF] text-[#4F46E5]",
-          targetName: "Team Member",
-          targetPosition: "Software Engineer",
+          targetName: emp?.name ?? "Team Member",
+          targetPosition: emp?.position ?? "—",
           description: "Evaluate your team member's performance",
         };
       default:
@@ -71,8 +87,8 @@ export function EmployeeEvaluationForm() {
           title: "Evaluation",
           icon: Star,
           color: "bg-[#F9FAFB] text-[#6B7280]",
-          targetName: "Employee",
-          targetPosition: "Position",
+          targetName: emp?.name ?? "Employee",
+          targetPosition: emp?.position ?? "—",
           description: "Complete the evaluation",
         };
     }
@@ -256,14 +272,18 @@ export function EmployeeEvaluationForm() {
     e.preventDefault();
     if (!validateForm()) return;
 
+    if (!id) return;
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    setIsSubmitting(false);
-    setShowSuccess(true);
-
-    setTimeout(() => {
-      navigate("/employee/performance?tab=tasks");
-    }, 2000);
+    setSubmitError(null);
+    try {
+      await performanceService.submitEvaluation(Number(id), buildEvaluationPayload(answers));
+      setShowSuccess(true);
+      setTimeout(() => navigate("/employee/performance?tab=tasks"), 1500);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Failed to submit evaluation.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Save as draft

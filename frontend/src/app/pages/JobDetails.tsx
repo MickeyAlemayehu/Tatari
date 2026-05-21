@@ -1,5 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router";
+import { jobsService, type JobRecord } from "../../services/jobs.service";
+import { applicantsService, type ApplicantRecord } from "../../services/applicants.service";
+import { AsyncState } from "../components/AsyncState";
+import { textToList } from "../../lib/utils";
 import {
   ArrowLeft,
   MapPin,
@@ -29,120 +33,103 @@ interface Applicant {
   rating?: number;
 }
 
+type JobView = {
+  id: number;
+  title: string;
+  department: string;
+  location: string;
+  type: string;
+  status: string;
+  postedDate: string;
+  closingDate: string;
+  salary: string;
+  positions: number;
+  description: string;
+  responsibilities: string[];
+  requirements: string[];
+  preferredQualifications: string[];
+  benefits: string[];
+};
+
+function mapJob(j: JobRecord): JobView {
+  const salary =
+    j.salary ??
+    (j.salary_min && j.salary_max
+      ? `$${j.salary_min.toLocaleString()} - $${j.salary_max.toLocaleString()}`
+      : "Competitive");
+  return {
+    id: j.id,
+    title: j.title,
+    department: j.department ?? "—",
+    location: j.location ?? "—",
+    type: j.type ?? j.employment_type ?? "Full-time",
+    status: j.status ?? "open",
+    postedDate: j.postedDate ?? "",
+    closingDate: j.closingDate ?? "",
+    salary,
+    positions: j.positions ?? 1,
+    description: j.description ?? "",
+    responsibilities: textToList(j.responsibilities),
+    requirements: textToList(j.requirements),
+    benefits: textToList(j.benefits),
+    preferredQualifications: [],
+  };
+}
+
+function mapApplicant(a: ApplicantRecord): Applicant {
+  const name = a.name ?? `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim();
+  const parts = name.split(" ");
+  const avatar =
+    parts.length >= 2
+      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      : name.slice(0, 2).toUpperCase();
+  return {
+    id: a.id,
+    name,
+    email: a.email,
+    phone: a.phone ?? "—",
+    appliedDate: a.appliedDate ?? "",
+    status: (a.status as Applicant["status"]) || "new",
+    experience: a.experience ?? "—",
+    avatar,
+    rating: a.rating,
+  };
+}
+
 export function JobDetails() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [activeTab, setActiveTab] = useState<"overview" | "applicants">("overview");
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [job, setJob] = useState<JobView | null>(null);
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
 
-  // Job data (in real app, this would be fetched based on id)
-  const job = {
-    id: 1,
-    title: "Senior Software Engineer",
-    department: "Engineering",
-    location: "San Francisco, CA",
-    type: "Full-time",
-    status: "open",
-    postedDate: "2026-03-01",
-    closingDate: "2026-04-15",
-    salary: "$120,000 - $160,000",
-    positions: 2,
-    description: "We are seeking an experienced Senior Software Engineer to join our growing engineering team. In this role, you will be responsible for designing, developing, and maintaining high-quality software solutions that power our platform. You'll work closely with product managers, designers, and other engineers to deliver features that delight our users and drive business growth.\n\nAs a Senior Software Engineer, you'll have the opportunity to mentor junior developers, contribute to architectural decisions, and work on challenging technical problems at scale. We're looking for someone who is passionate about clean code, best practices, and continuous improvement.",
-    responsibilities: [
-      "Design and develop scalable, high-performance web applications using modern technologies",
-      "Write clean, maintainable, and well-tested code following best practices",
-      "Collaborate with cross-functional teams to define and implement new features",
-      "Mentor junior engineers and conduct code reviews",
-      "Participate in architectural decisions and technical planning",
-      "Optimize application performance and resolve production issues",
-      "Stay current with emerging technologies and industry trends",
-    ],
-    requirements: [
-      "5+ years of professional software development experience",
-      "Strong proficiency in JavaScript/TypeScript and React",
-      "Experience with Node.js and RESTful API development",
-      "Solid understanding of database design (SQL and NoSQL)",
-      "Experience with cloud platforms (AWS, GCP, or Azure)",
-      "Strong problem-solving and debugging skills",
-      "Excellent communication and collaboration abilities",
-      "Bachelor's degree in Computer Science or related field (or equivalent experience)",
-    ],
-    preferredQualifications: [
-      "Experience with microservices architecture",
-      "Knowledge of containerization (Docker, Kubernetes)",
-      "Familiarity with CI/CD pipelines",
-      "Open source contributions",
-      "Experience leading technical projects",
-    ],
-    benefits: [
-      "Competitive salary and equity package",
-      "Comprehensive health, dental, and vision insurance",
-      "401(k) matching program",
-      "Flexible work arrangements and remote options",
-      "Professional development budget ($2,500/year)",
-      "Generous PTO policy (25 days + holidays)",
-      "Modern office in downtown San Francisco",
-      "Catered lunches and snacks",
-      "Team building events and activities",
-    ],
-  };
+  useEffect(() => {
+    if (!id) return;
+    void (async () => {
+      try {
+        const [jobRes, applicantsRes] = await Promise.all([
+          jobsService.get(Number(id)),
+          applicantsService.list({ vacancy_id: Number(id), per_page: 100 }),
+        ]);
+        setJob(mapJob(jobRes));
+        setApplicants(applicantsRes.data.map(mapApplicant));
+      } catch {
+        setLoadError("Failed to load job details");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [id]);
 
-  // Applicants data
-  const [applicants] = useState<Applicant[]>([
-    {
-      id: 1,
-      name: "Alex Martinez",
-      email: "alex.martinez@email.com",
-      phone: "+1 (555) 123-4567",
-      appliedDate: "2026-03-18",
-      status: "shortlisted",
-      experience: "7 years",
-      avatar: "AM",
-      rating: 4.5,
-    },
-    {
-      id: 2,
-      name: "Sarah Chen",
-      email: "sarah.chen@email.com",
-      phone: "+1 (555) 234-5678",
-      appliedDate: "2026-03-17",
-      status: "reviewing",
-      experience: "6 years",
-      avatar: "SC",
-      rating: 4.0,
-    },
-    {
-      id: 3,
-      name: "Michael Rodriguez",
-      email: "m.rodriguez@email.com",
-      phone: "+1 (555) 345-6789",
-      appliedDate: "2026-03-16",
-      status: "shortlisted",
-      experience: "8 years",
-      avatar: "MR",
-      rating: 5.0,
-    },
-    {
-      id: 4,
-      name: "Emily Thompson",
-      email: "emily.t@email.com",
-      phone: "+1 (555) 456-7890",
-      appliedDate: "2026-03-15",
-      status: "new",
-      experience: "5 years",
-      avatar: "ET",
-    },
-    {
-      id: 5,
-      name: "David Kim",
-      email: "david.kim@email.com",
-      phone: "+1 (555) 567-8901",
-      appliedDate: "2026-03-14",
-      status: "rejected",
-      experience: "3 years",
-      avatar: "DK",
-      rating: 2.5,
-    },
-  ]);
+  if (!job) {
+    return (
+      <AppLayout>
+        <AsyncState loading={loading} error={loadError} empty={!loading} emptyMessage="Job not found." />
+      </AppLayout>
+    );
+  }
 
   // Status badge styling
   const getStatusBadge = (status: typeof job.status) => {

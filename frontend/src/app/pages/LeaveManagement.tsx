@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { leaveService, type LeaveRequestRecord, type LeaveTypeRecord } from "../../services/leave.service";
+import { ApiError } from "../../lib/api";
 
 type TabType = "overview" | "request" | "history" | "approvals" | "calendar";
 
@@ -77,12 +79,21 @@ export function LeaveManagement() {
     setSearchParams({ tab });
   };
 
-  // Overview data - Company-wide statistics
-  const totalEmployees = 248;
-  const totalLeaveRequests = 127;
-  const pendingLeaveRequests = 15;
-  const approvedLeaveRequests = 98;
-  const rejectedLeaveRequests = 14;
+  const [totalEmployees, setTotalEmployees] = useState(0);
+  const [totalLeaveRequests, setTotalLeaveRequests] = useState(0);
+  const [pendingLeaveRequests, setPendingLeaveRequests] = useState(0);
+  const [approvedLeaveRequests, setApprovedLeaveRequests] = useState(0);
+  const [rejectedLeaveRequests, setRejectedLeaveRequests] = useState(0);
+
+  useEffect(() => {
+    void leaveService.summary().then((s) => {
+      setTotalEmployees(s.totalEmployees);
+      setTotalLeaveRequests(s.totalLeaveRequests);
+      setPendingLeaveRequests(s.pendingLeaveRequests);
+      setApprovedLeaveRequests(s.approvedLeaveRequests);
+      setRejectedLeaveRequests(s.rejectedLeaveRequests);
+    }).catch(() => {});
+  }, []);
 
   const calculatePercentage = (used: number, total: number) => {
     return Math.round((used / total) * 100);
@@ -368,11 +379,53 @@ function OverviewTab({
   );
 }
 
+function mapHistoryItem(r: LeaveRequestRecord): LeaveHistoryItem {
+  return {
+    id: r.id,
+    employee: r.employee?.name ?? "Unknown",
+    type: r.type ?? r.leaveType ?? "Leave",
+    startDate: r.startDate,
+    endDate: r.endDate,
+    days: r.days,
+    reason: r.reason ?? "",
+    status: r.status as LeaveHistoryItem["status"],
+    appliedDate: r.appliedDate ?? "",
+  };
+}
+
+function mapPendingItem(r: LeaveRequestRecord): PendingLeaveRequest {
+  const name = r.employee?.name ?? "Unknown";
+  const parts = name.split(" ");
+  const avatar = parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2).toUpperCase();
+  return {
+    id: r.id,
+    employee: {
+      name,
+      position: r.employee?.position ?? "—",
+      department: r.employee?.department ?? "—",
+      avatar,
+    },
+    type: r.type ?? r.leaveType ?? "Leave",
+    startDate: r.startDate,
+    endDate: r.endDate,
+    days: r.days,
+    reason: r.reason ?? "",
+    appliedDate: r.appliedDate ?? "",
+    status: "pending",
+  };
+}
+
 // Request Leave Tab Component
 function RequestLeaveTab() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [leaveTypes, setLeaveTypes] = useState<LeaveTypeRecord[]>([]);
   const [leaveType, setLeaveType] = useState("");
+
+  useEffect(() => {
+    void leaveService.types().then((res) => setLeaveTypes(res.data)).catch(() => {});
+  }, []);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
@@ -435,17 +488,29 @@ function RequestLeaveTab() {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 1500));
-    setIsSubmitting(false);
-    setShowSuccess(true);
-
-    setTimeout(() => {
-      setShowSuccess(false);
-      setLeaveType("");
-      setStartDate("");
-      setEndDate("");
-      setReason("");
-    }, 3000);
+    setSubmitError(null);
+    try {
+      const selected = leaveTypes.find((t) => t.name === leaveType);
+      await leaveService.create({
+        leave_type_id: selected?.id,
+        type: leaveType,
+        start_date: startDate,
+        end_date: endDate,
+        reason: reason.trim(),
+      });
+      setShowSuccess(true);
+      setTimeout(() => {
+        setShowSuccess(false);
+        setLeaveType("");
+        setStartDate("");
+        setEndDate("");
+        setReason("");
+      }, 3000);
+    } catch (err) {
+      setSubmitError(err instanceof ApiError ? err.message : "Failed to submit leave request");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleFieldChange = (field: string, value: string) => {
@@ -503,13 +568,11 @@ function RequestLeaveTab() {
                 }`}
               >
                 <option value="">Select leave type</option>
-                <option value="annual">Annual Leave</option>
-                <option value="sick">Sick Leave</option>
-                <option value="personal">Personal Leave</option>
-                <option value="maternity">Maternity Leave</option>
-                <option value="paternity">Paternity Leave</option>
-                <option value="unpaid">Unpaid Leave</option>
-                <option value="other">Other</option>
+                {leaveTypes.map((t) => (
+                  <option key={t.id} value={t.name}>
+                    {t.name}
+                  </option>
+                ))}
               </select>
               {errors.leaveType && (
                 <div className="mt-2 flex items-center gap-1 text-[#EF4444]">
@@ -652,119 +715,14 @@ function LeaveHistoryTab({ formatDate }: { formatDate: (dateStr: string) => stri
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [leaveRequests, setLeaveRequests] = useState<LeaveHistoryItem[]>([]);
 
-  const leaveRequests: LeaveHistoryItem[] = [
-    {
-      id: 1,
-      employee: "John Doe",
-      type: "Annual Leave",
-      startDate: "2026-05-15",
-      endDate: "2026-05-19",
-      days: 5,
-      reason: "Family vacation to Hawaii",
-      status: "pending",
-      appliedDate: "2026-04-20",
-    },
-    {
-      id: 2,
-      employee: "Jane Smith",
-      type: "Sick Leave",
-      startDate: "2026-05-10",
-      endDate: "2026-05-12",
-      days: 3,
-      reason: "Medical appointment and recovery",
-      status: "pending",
-      appliedDate: "2026-05-08",
-    },
-    {
-      id: 3,
-      employee: "Robert Brown",
-      type: "Annual Leave",
-      startDate: "2026-05-20",
-      endDate: "2026-05-24",
-      days: 5,
-      reason: "Personal travel",
-      status: "pending",
-      appliedDate: "2026-04-25",
-    },
-    {
-      id: 4,
-      employee: "Sarah Johnson",
-      type: "Annual Leave",
-      startDate: "2026-04-15",
-      endDate: "2026-04-19",
-      days: 5,
-      reason: "Family vacation to the beach",
-      status: "approved",
-      appliedDate: "2026-03-10",
-    },
-    {
-      id: 5,
-      employee: "Michael Chen",
-      type: "Sick Leave",
-      startDate: "2026-03-25",
-      endDate: "2026-03-26",
-      days: 2,
-      reason: "Medical appointment",
-      status: "approved",
-      appliedDate: "2026-03-24",
-    },
-    {
-      id: 6,
-      employee: "Emily Davis",
-      type: "Personal Leave",
-      startDate: "2026-04-01",
-      endDate: "2026-04-03",
-      days: 3,
-      reason: "Personal matters",
-      status: "approved",
-      appliedDate: "2026-03-20",
-    },
-    {
-      id: 7,
-      employee: "David Martinez",
-      type: "Annual Leave",
-      startDate: "2026-03-15",
-      endDate: "2026-03-16",
-      days: 2,
-      reason: "Short break",
-      status: "approved",
-      appliedDate: "2026-03-05",
-    },
-    {
-      id: 8,
-      employee: "Lisa Anderson",
-      type: "Sick Leave",
-      startDate: "2026-02-20",
-      endDate: "2026-02-20",
-      days: 1,
-      reason: "Flu symptoms",
-      status: "approved",
-      appliedDate: "2026-02-19",
-    },
-    {
-      id: 9,
-      employee: "James Wilson",
-      type: "Annual Leave",
-      startDate: "2026-02-10",
-      endDate: "2026-02-14",
-      days: 5,
-      reason: "Winter vacation",
-      status: "rejected",
-      appliedDate: "2026-01-15",
-    },
-    {
-      id: 10,
-      employee: "Emma Thompson",
-      type: "Personal Leave",
-      startDate: "2026-01-25",
-      endDate: "2026-01-26",
-      days: 2,
-      reason: "Family matters",
-      status: "rejected",
-      appliedDate: "2026-01-10",
-    },
-  ];
+  useEffect(() => {
+    void leaveService
+      .list({ per_page: 100 })
+      .then((res) => setLeaveRequests(res.data.map(mapHistoryItem)))
+      .catch(() => {});
+  }, []);
 
   const filteredRequests = leaveRequests.filter((request) => {
     const matchesSearch =
@@ -1001,43 +959,22 @@ function ApprovalsTab({ formatDate }: { formatDate: (dateStr: string) => string 
     message: string;
   } | null>(null);
 
-  const [pendingRequests, setPendingRequests] = useState<PendingLeaveRequest[]>([
-    {
-      id: 1,
-      employee: {
-        name: "Emily Davis",
-        position: "Marketing Specialist",
-        department: "Marketing",
-        avatar: "ED",
-      },
-      type: "Annual Leave",
-      startDate: "2026-04-01",
-      endDate: "2026-04-03",
-      days: 3,
-      reason: "Personal matters to attend to. Planning a short trip with family.",
-      appliedDate: "2026-03-20",
-      status: "pending",
-    },
-    {
-      id: 2,
-      employee: {
-        name: "David Martinez",
-        position: "Senior Developer",
-        department: "Engineering",
-        avatar: "DM",
-      },
-      type: "Annual Leave",
-      startDate: "2026-05-10",
-      endDate: "2026-05-17",
-      days: 8,
-      reason: "International travel and vacation.",
-      appliedDate: "2026-03-15",
-      status: "pending",
-    },
-  ]);
+  const [pendingRequests, setPendingRequests] = useState<PendingLeaveRequest[]>([]);
+
+  useEffect(() => {
+    void leaveService
+      .list({ status: "pending", per_page: 50 })
+      .then((res) => setPendingRequests(res.data.map(mapPendingItem)))
+      .catch(() => {});
+  }, []);
 
   const handleApprove = async () => {
     if (!selectedRequest) return;
+    try {
+      await leaveService.approve(selectedRequest.id);
+    } catch {
+      return;
+    }
     setPendingRequests((prev) => prev.filter((req) => req.id !== selectedRequest.id));
     setActionStatus({
       show: true,
@@ -1058,6 +995,11 @@ function ApprovalsTab({ formatDate }: { formatDate: (dateStr: string) => string 
     }
     if (rejectReason.trim().length < 10) {
       setRejectError("Reason must be at least 10 characters");
+      return;
+    }
+    try {
+      await leaveService.reject(selectedRequest.id, rejectReason.trim());
+    } catch {
       return;
     }
     setPendingRequests((prev) => prev.filter((req) => req.id !== selectedRequest.id));

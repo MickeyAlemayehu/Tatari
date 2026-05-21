@@ -1,220 +1,122 @@
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { Calendar, TrendingUp, ClipboardList, Clock, CheckCircle } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { leaveService } from "../../services/leave.service";
+import { performanceService } from "../../services/performance.service";
 
 export function EmployeeDashboard() {
   const navigate = useNavigate();
+  const [leaveRemaining, setLeaveRemaining] = useState(0);
+  const [pendingLeave, setPendingLeave] = useState(0);
+  const [pendingTasks, setPendingTasks] = useState(0);
+  const [performanceScore, setPerformanceScore] = useState<string>("—");
 
-  //Personal stats - employee focused only
+  useEffect(() => {
+    leaveService.myBalances().then((res) => {
+      const total = res.data.reduce((sum, b) => sum + (b.remaining ?? 0), 0);
+      setLeaveRemaining(Math.round(total));
+    }).catch(() => {});
+
+    leaveService.myRequests({ per_page: 50 }).then((res) => {
+      setPendingLeave(res.data.filter((r) => r.status === "pending").length);
+    }).catch(() => {});
+
+    performanceService.myAssignments().then((res) => {
+      setPendingTasks(res.data.filter((a) => a.status !== "submitted" && a.status !== "completed").length);
+    }).catch(() => {});
+
+    performanceService.myResults().then((res) => {
+      const latest = res.data[0];
+      if (latest?.finalScore) {
+        setPerformanceScore(`${latest.finalScore.toFixed(1)}/5`);
+      }
+    }).catch(() => {});
+  }, []);
+
   const myStats = [
     {
       title: "Leave Balance",
-      value: "18 days",
+      value: `${leaveRemaining} days`,
       subtitle: "Remaining this year",
       icon: Calendar,
       color: "from-[#06B6D4] to-[#06B6D4]",
     },
     {
       title: "Pending Leave",
-      value: "1",
+      value: String(pendingLeave),
       subtitle: "Awaiting approval",
       icon: Clock,
       color: "from-[#F59E0B] to-[#F59E0B]",
     },
     {
       title: "My Tasks",
-      value: "2",
+      value: String(pendingTasks),
       subtitle: "Evaluations to complete",
       icon: ClipboardList,
       color: "from-[#4F46E5] to-[#4338CA]",
     },
     {
       title: "Performance",
-      value: "4.5/5",
-      subtitle: "Last evaluation score",
+      value: performanceScore,
+      subtitle: "Latest evaluation score",
       icon: TrendingUp,
       color: "from-[#22C55E] to-[#22C55E]",
     },
   ];
 
-  const pendingLeaveRequests = [
-    {
-      id: 1,
-      type: "Annual Leave",
-      startDate: "Apr 15, 2026",
-      endDate: "Apr 19, 2026",
-      days: 5,
-      status: "pending" as const,
-    },
-  ];
-
-  const myTasks = [
-    {
-      id: 1,
-      title: "Self Evaluation - Q1 2026",
-      dueDate: "Apr 30, 2026",
-      priority: "high",
-    },
-    {
-      id: 2,
-      title: "Peer Evaluation - Sarah Johnson",
-      dueDate: "May 5, 2026",
-      priority: "medium",
-    },
-  ];
-
-  const recentActivity = [
-    {
-      id: 1,
-      action: "Leave request submitted",
-      date: "2 hours ago",
-      icon: Calendar,
-    },
-    {
-      id: 2,
-      action: "Payslip available for March 2026",
-      date: "1 day ago",
-      icon: CheckCircle,
-    },
-    {
-      id: 3,
-      action: "Performance review scheduled",
-      date: "3 days ago",
-      icon: TrendingUp,
-    },
-  ];
-
   return (
-    <AppLayout title="Dashboard" subtitle="Welcome back, John Doe">
+    <AppLayout title="Dashboard" subtitle="Welcome back!">
       <div className="p-6">
-        {/* Personal Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {myStats.map((stat) => {
             const Icon = stat.icon;
             return (
-              <div
-                key={stat.title}
-                className="bg-white rounded-xl p-6 border border-[#E5E7EB] hover:shadow-lg transition"
-              >
-                <div className="flex items-start justify-between mb-4">
-                  <div
-                    className={`p-3 rounded-lg bg-gradient-to-br ${stat.color} flex items-center justify-center`}
-                  >
-                    <Icon className="w-6 h-6 text-white" />
-                  </div>
+              <div key={stat.title} className="bg-white rounded-xl p-6 border border-[#E5E7EB]">
+                <div className={`w-12 h-12 bg-gradient-to-br ${stat.color} rounded-lg flex items-center justify-center mb-4`}>
+                  <Icon className="w-6 h-6 text-white" />
                 </div>
-                <h3 className="text-2xl text-[#111827] mb-1">{stat.value}</h3>
-                <p className="text-sm text-[#6B7280]">{stat.title}</p>
-                <p className="text-xs text-[#6B7280] mt-1">{stat.subtitle}</p>
+                <p className="text-sm text-[#6B7280] mb-1">{stat.title}</p>
+                <p className="text-2xl text-[#111827] mb-1">{stat.value}</p>
+                <p className="text-xs text-[#6B7280]">{stat.subtitle}</p>
               </div>
             );
           })}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* My Leave Requests */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB]">
-            <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
-              <div>
-                <h3 className="text-[#111827]">My Leave Requests</h3>
-                <p className="text-sm text-[#6B7280]">Pending approvals</p>
-              </div>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+            <h3 className="text-base text-[#111827] mb-4">Quick Actions</h3>
+            <div className="space-y-3">
               <button
-                onClick={() => navigate("/leave?tab=request")}
-                className="text-sm text-[#4F46E5] hover:text-[#4338CA]"
+                onClick={() => navigate("/employee/leave")}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-[#E5E7EB] hover:border-[#06B6D4] transition text-left"
               >
-                Request Leave
+                <Calendar className="w-5 h-5 text-[#06B6D4]" />
+                <span className="text-sm">Request Leave</span>
+              </button>
+              <button
+                onClick={() => navigate("/employee/performance")}
+                className="w-full flex items-center gap-3 p-3 rounded-lg border border-[#E5E7EB] hover:border-[#4F46E5] transition text-left"
+              >
+                <ClipboardList className="w-5 h-5 text-[#4F46E5]" />
+                <span className="text-sm">View Evaluations</span>
               </button>
             </div>
-            <div className="p-6">
-              {pendingLeaveRequests.length > 0 ? (
-                <div className="space-y-4">
-                  {pendingLeaveRequests.map((request) => (
-                    <div
-                      key={request.id}
-                      className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <h4 className="text-sm text-[#111827]">{request.type}</h4>
-                        <Badge variant="warning" size="sm">
-                          Pending
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-[#6B7280]">
-                        {request.startDate} - {request.endDate}
-                      </p>
-                      <p className="text-xs text-[#6B7280] mt-1">
-                        {request.days} {request.days === 1 ? "day" : "days"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-[#6B7280] text-center py-4">
-                  No pending leave requests
-                </p>
-              )}
-            </div>
           </div>
-
-          {/* My Tasks */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB]">
-            <div className="px-6 py-4 border-b border-[#E5E7EB]">
-              <h3 className="text-[#111827]">My Tasks</h3>
-              <p className="text-sm text-[#6B7280]">Pending evaluations</p>
+          <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+            <h3 className="text-base text-[#111827] mb-4">Recent Activity</h3>
+            <div className="flex items-center gap-3 text-sm text-[#6B7280]">
+              <CheckCircle className="w-5 h-5 text-[#22C55E]" />
+              <span>Check notifications for the latest updates</span>
             </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {myTasks.map((task) => (
-                  <div
-                    key={task.id}
-                    className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB] hover:border-[#4F46E5] transition cursor-pointer"
-                    onClick={() => navigate("/performance")}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <h4 className="text-sm text-[#111827]">{task.title}</h4>
-                      <Badge
-                        variant={task.priority === "high" ? "danger" : "info"}
-                        size="sm"
-                      >
-                        {task.priority}
-                      </Badge>
-                    </div>
-                    <p className="text-xs text-[#6B7280]">Due: {task.dueDate}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="bg-white rounded-xl border border-[#E5E7EB] lg:col-span-2">
-            <div className="px-6 py-4 border-b border-[#E5E7EB]">
-              <h3 className="text-[#111827]">Recent Activity</h3>
-              <p className="text-sm text-[#6B7280]">Your recent actions and updates</p>
-            </div>
-            <div className="p-6">
-              <div className="space-y-4">
-                {recentActivity.map((activity) => {
-                  const Icon = activity.icon;
-                  return (
-                    <div
-                      key={activity.id}
-                      className="flex items-center gap-4 p-3 hover:bg-[#F9FAFB] rounded-lg transition"
-                    >
-                      <div className="w-10 h-10 bg-[#EEF2FF] rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Icon className="w-5 h-5 text-[#4F46E5]" />
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm text-[#111827]">{activity.action}</p>
-                        <p className="text-xs text-[#6B7280]">{activity.date}</p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <button
+              onClick={() => navigate("/employee/notifications")}
+              className="mt-4 text-sm text-[#4F46E5] hover:underline"
+            >
+              View notifications
+            </button>
           </div>
         </div>
       </div>
