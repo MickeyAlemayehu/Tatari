@@ -396,7 +396,9 @@ function mapHistoryItem(r: LeaveRequestRecord): LeaveHistoryItem {
 function mapPendingItem(r: LeaveRequestRecord): PendingLeaveRequest {
   const name = r.employee?.name ?? "Unknown";
   const parts = name.split(" ");
-  const avatar = parts.length >= 2 ? `${parts[0][0]}${parts[1][0]}` : name.slice(0, 2).toUpperCase();
+  const avatar = parts.length >= 2
+    ? `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase()
+    : name.slice(0, 2).toUpperCase();
   return {
     id: r.id,
     employee: {
@@ -492,7 +494,7 @@ function RequestLeaveTab() {
     try {
       const selected = leaveTypes.find((t) => t.name === leaveType);
       await leaveService.create({
-        leave_type_id: selected?.id,
+        ...(selected ? { leave_type_id: selected.id } : {}),
         type: leaveType,
         start_date: startDate,
         end_date: endDate,

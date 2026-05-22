@@ -62,7 +62,7 @@ class PerformanceEvaluationWorkflowController extends Controller
             ->with(['period', 'employee.department', 'evaluator.department', 'evaluation'])
             ->latest('assigned_at');
 
-        if (! $employee->hasPermission('performance_create', 4)) {
+        if (! $employee->hasPermission('performance_create')) {
             $query->where(fn ($q) => $q->where('employee_id', $employee->id)->orWhere('evaluator_id', $employee->id));
         }
 
@@ -125,7 +125,7 @@ class PerformanceEvaluationWorkflowController extends Controller
     {
         $evaluator = $request->user('api') ?? $request->user();
 
-        if ($assignment->evaluator_id !== $evaluator->id && ! $evaluator->hasPermission('performance_evaluate', 4)) {
+        if ($assignment->evaluator_id !== $evaluator->id && ! $evaluator->hasPermission('performance_evaluate')) {
             abort(Response::HTTP_FORBIDDEN, 'Not allowed to submit this evaluation.');
         }
 

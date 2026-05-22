@@ -8,9 +8,11 @@ import { leaveService } from "../../services/leave.service";
 import { jobsService } from "../../services/jobs.service";
 import { performanceService } from "../../services/performance.service";
 import { initials, formatDate } from "../../lib/utils";
+import { useAuth } from "../../contexts/AuthContext";
 
 export function HRDashboard() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [totalEmployees, setTotalEmployees] = useState(0);
   const [pendingLeave, setPendingLeave] = useState(0);
   const [activeJobs, setActiveJobs] = useState(0);
@@ -20,7 +22,8 @@ export function HRDashboard() {
   >([]);
 
   useEffect(() => {
-    employeesService.list({ per_page: 5 }).then((res) => {
+    if (hasPermission("manage_employees")) {
+      employeesService.list({ per_page: 5 }).then((res) => {
       setTotalEmployees(res.total);
       setRecentEmployees(
         res.data.map((e) => ({
@@ -33,14 +36,21 @@ export function HRDashboard() {
           avatar: initials(e.first_name, e.last_name),
         }))
       );
-    }).catch(() => {});
+      }).catch(() => {});
 
-    leaveService.summary().then((s) => setPendingLeave(s.pendingLeaveRequests)).catch(() => {});
-    jobsService.list({ status: "open", per_page: 100 }).then((res) => setActiveJobs(res.data.length)).catch(() => {});
-    performanceService.periods().then((res) => {
-      setActivePeriods(res.data.filter((p) => p.status === "active").length);
-    }).catch(() => {});
-  }, []);
+      jobsService.list({ status: "open", per_page: 100 }).then((res) => setActiveJobs(res.data.length)).catch(() => {});
+    }
+
+    if (hasPermission("approve_leave")) {
+      leaveService.summary().then((s) => setPendingLeave(s.pendingLeaveRequests)).catch(() => {});
+    }
+
+    if (hasPermission("performance_create")) {
+      performanceService.periods().then((res) => {
+        setActivePeriods(res.data.filter((p) => p.status === "active").length);
+      }).catch(() => {});
+    }
+  }, [hasPermission]);
 
   const stats = [
     {
@@ -49,6 +59,7 @@ export function HRDashboard() {
       subtitle: "Active workforce",
       icon: Users,
       color: "from-[#4F46E5] to-[#4338CA]",
+      permission: "manage_employees",
     },
     {
       title: "Pending Leave Requests",
@@ -56,6 +67,7 @@ export function HRDashboard() {
       subtitle: "Awaiting approval",
       icon: Calendar,
       color: "from-[#F59E0B] to-[#F59E0B]",
+      permission: "approve_leave",
     },
     {
       title: "Active Job Vacancies",
@@ -63,6 +75,7 @@ export function HRDashboard() {
       subtitle: "Currently hiring",
       icon: Briefcase,
       color: "from-[#06B6D4] to-[#06B6D4]",
+      permission: "manage_employees",
     },
     {
       title: "Active Evaluations",
@@ -70,6 +83,7 @@ export function HRDashboard() {
       subtitle: "Open periods",
       icon: TrendingUp,
       color: "from-[#22C55E] to-[#22C55E]",
+      permission: "performance_create",
     },
   ];
 
@@ -77,7 +91,7 @@ export function HRDashboard() {
     <AppLayout title="HR Dashboard" subtitle="Overview of HR operations">
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          {stats.map((stat) => {
+          {stats.filter((stat) => hasPermission(stat.permission)).map((stat) => {
             const Icon = stat.icon;
             return (
               <div key={stat.title} className="bg-white rounded-xl p-6 border border-[#E5E7EB]">
@@ -92,6 +106,7 @@ export function HRDashboard() {
           })}
         </div>
 
+        {hasPermission("manage_employees") && (
         <div className="bg-white rounded-xl border border-[#E5E7EB]">
           <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
             <h2 className="text-sm text-[#111827]">Recent Employees</h2>
@@ -134,6 +149,7 @@ export function HRDashboard() {
             )}
           </div>
         </div>
+        )}
       </div>
     </AppLayout>
   );

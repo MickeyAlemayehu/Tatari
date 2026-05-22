@@ -19,7 +19,7 @@ const emptyForm = {
   transport_allowance: "0",
   other_allowances: "0",
   currency: "USD",
-  effective_from: new Date().toISOString().split("T")[0],
+  effective_from: new Date().toISOString().split("T")[0] ?? "",
   effective_to: "",
 };
 
@@ -82,7 +82,7 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
         transport_allowance: parseFloat(form.transport_allowance) || 0,
         other_allowances: parseFloat(form.other_allowances) || 0,
         currency: form.currency,
-        effective_from: form.effective_from,
+        effective_from: form.effective_from || new Date().toISOString().split("T")[0] || "",
         effective_to: form.effective_to || null,
         status: "active",
       };

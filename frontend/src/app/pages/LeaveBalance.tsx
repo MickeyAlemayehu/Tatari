@@ -39,7 +39,7 @@ export function LeaveBalance() {
             total: b.total,
             used: b.used,
             remaining: b.remaining,
-            color: BALANCE_COLORS[i % BALANCE_COLORS.length],
+            color: BALANCE_COLORS[i % BALANCE_COLORS.length] ?? BALANCE_COLORS[0] ?? "from-[#4F46E5] to-[#4338CA]",
           }))
         );
         setLeaveHistory(requestsRes.data.map(mapMyHistoryItem));
@@ -76,14 +76,14 @@ export function LeaveBalance() {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => navigate("/leave/history")}
+                onClick={() => navigate("/employee/leave?tab=requests")}
                 className="flex items-center gap-2 px-4 py-2.5 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition"
               >
                 <Calendar className="w-5 h-5" />
                 <span>View All History</span>
               </button>
               <button
-                onClick={() => navigate("/leave/request")}
+                onClick={() => navigate("/employee/leave?tab=requests")}
                 className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
               >
                 <Plus className="w-5 h-5" />
@@ -287,7 +287,7 @@ export function LeaveBalance() {
             {/* Footer */}
             <div className="px-6 py-4 border-t border-[#E5E7EB]">
               <button
-                onClick={() => navigate("/leave/history")}
+                onClick={() => navigate("/employee/leave?tab=requests")}
                 className="text-sm text-[#4F46E5] hover:text-indigo-700"
               >
                 View all leave history →

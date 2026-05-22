@@ -19,7 +19,7 @@ interface Applicant {
   experience: string;
   location: string;
   avatar: string;
-  rating?: number;
+  rating?: number | undefined;
 }
 
 export function ApplicantManagement() {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import { Building,
   Save,
@@ -23,6 +23,8 @@ import { Building,
   DollarSign,
   Activity, } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { ApiError } from "../../lib/api";
+import { companiesService, type CompanyRecord } from "../../services/companies.service";
 
 interface Company {
   id: number;
@@ -82,64 +84,81 @@ interface Company {
   };
 }
 
+function toCompany(record: CompanyRecord): Company {
+  const registeredDate = record.registeredDate ?? record.requestDate ?? new Date().toISOString();
+  const renewalDate = record.expirationDate ?? registeredDate;
+
+  return {
+    id: record.id,
+    name: record.name ?? record.companyName,
+    registrationNumber: record.registrationNumber ?? `COMP-${record.id}`,
+    industry: record.industry,
+    size: record.size,
+    status:
+      record.status === "approved"
+        ? "active"
+        : record.status === "rejected"
+        ? "inactive"
+        : record.status,
+    founded: registeredDate,
+    registeredDate,
+    lastActive: registeredDate,
+    website: record.website,
+    email: record.email ?? record.contactEmail,
+    phone: record.phone ?? record.contactPhone,
+    address: record.address ?? "",
+    city: record.city,
+    state: "",
+    country: record.country,
+    postalCode: "",
+    primaryContact: {
+      name: record.contactName,
+      title: record.jobTitle,
+      email: record.contactEmail,
+      phone: record.contactPhone,
+    },
+    subscription: {
+      plan: "professional",
+      startDate: registeredDate,
+      renewalDate,
+      billingCycle: "annual",
+      amount: 0,
+    },
+    metrics: {
+      totalEmployees: record.metrics?.totalEmployees ?? record.employeeCount,
+      activeEmployees: record.metrics?.activeEmployees ?? record.employeeCount,
+      departments: record.metrics?.departments ?? 0,
+      payrollRuns: record.metrics?.payrollRuns ?? 0,
+      lastPayroll: record.metrics?.lastPayroll ?? registeredDate,
+    },
+    settings: {
+      multiCurrency: false,
+      customBranding: Boolean(record.website),
+      apiAccess: false,
+      ssoEnabled: false,
+    },
+  };
+}
+
 export function CompanyDetails() {
   const navigate = useNavigate();
   const { id } = useParams();
   
   const [activeTab, setActiveTab] = useState<"overview" | "subscription" | "activity" | "settings">("overview");
+  const [company, setCompany] = useState<Company | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Company data
-  const company: Company = {
-    id: 1,
-    name: "TechCorp Solutions",
-    registrationNumber: "US-TC-2026-001",
-    industry: "Technology",
-    size: "Medium (50-200 employees)",
-    status: "active",
-    founded: "2020-01-15",
-    registeredDate: "2026-02-10",
-    lastActive: "2026-03-21 14:35",
-    
-    website: "www.techcorp.com",
-    email: "info@techcorp.com",
-    phone: "+1 (555) 123-4567",
-    
-    address: "123 Tech Avenue, Suite 500",
-    city: "San Francisco",
-    state: "California",
-    country: "United States",
-    postalCode: "94105",
-    
-    primaryContact: {
-      name: "John Smith",
-      title: "HR Director",
-      email: "john.smith@techcorp.com",
-      phone: "+1 (555) 123-4568",
-    },
-    
-    subscription: {
-      plan: "professional",
-      startDate: "2026-02-15",
-      renewalDate: "2027-02-15",
-      billingCycle: "annual",
-      amount: 4999,
-    },
-    
-    metrics: {
-      totalEmployees: 150,
-      activeEmployees: 145,
-      departments: 8,
-      payrollRuns: 24,
-      lastPayroll: "2026-03-15",
-    },
-    
-    settings: {
-      multiCurrency: true,
-      customBranding: true,
-      apiAccess: true,
-      ssoEnabled: false,
-    },
-  };
+  useEffect(() => {
+    if (!id) return;
+
+    setIsLoading(true);
+    companiesService
+      .get(Number(id))
+      .then((record) => setCompany(toCompany(record)))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load company."))
+      .finally(() => setIsLoading(false));
+  }, [id]);
 
   // Activity timeline
   const activities = [
@@ -258,6 +277,28 @@ export function CompanyDetails() {
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
 
+  if (isLoading) {
+    return (
+      <AppLayout>
+        <div className="min-h-screen flex items-center justify-center bg-[#F9FAFB]">
+          <div className="w-10 h-10 border-4 border-[#4F46E5] border-t-transparent rounded-full animate-spin" />
+        </div>
+      </AppLayout>
+    );
+  }
+
+  if (error || !company) {
+    return (
+      <AppLayout>
+        <div className="p-6">
+          <div className="rounded-lg border border-[#EF4444]/20 bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+            {error ?? "Company not found."}
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       {/* Main Content */}
@@ -276,22 +317,6 @@ export function CompanyDetails() {
                 <h1 className="text-xl text-[#111827]">Company Details</h1>
                 <p className="text-sm text-[#6B7280]">{company.registrationNumber}</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => console.log("Edit company")}
-                className="flex items-center gap-2 px-4 py-2.5 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition"
-              >
-                <Edit className="w-4 h-4" />
-                <span className="hidden sm:inline">Edit</span>
-              </button>
-              <button
-                onClick={() => console.log("Settings")}
-                className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
-              >
-                <Settings className="w-4 h-4" />
-                <span className="hidden sm:inline">Settings</span>
-              </button>
             </div>
           </div>
         </header>
@@ -365,36 +390,6 @@ export function CompanyDetails() {
                 }`}
               >
                 Overview
-              </button>
-              <button
-                onClick={() => setActiveTab("subscription")}
-                className={`px-6 py-3 text-sm transition border-b-2 ${
-                  activeTab === "subscription"
-                    ? "border-[#4F46E5] text-[#4F46E5]"
-                    : "border-transparent text-[#6B7280] hover:text-[#111827]"
-                }`}
-              >
-                Subscription
-              </button>
-              <button
-                onClick={() => setActiveTab("activity")}
-                className={`px-6 py-3 text-sm transition border-b-2 ${
-                  activeTab === "activity"
-                    ? "border-[#4F46E5] text-[#4F46E5]"
-                    : "border-transparent text-[#6B7280] hover:text-[#111827]"
-                }`}
-              >
-                Activity
-              </button>
-              <button
-                onClick={() => setActiveTab("settings")}
-                className={`px-6 py-3 text-sm transition border-b-2 ${
-                  activeTab === "settings"
-                    ? "border-[#4F46E5] text-[#4F46E5]"
-                    : "border-transparent text-[#6B7280] hover:text-[#111827]"
-                }`}
-              >
-                Settings
               </button>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { CheckCircle, XCircle, Eye, Download, Calendar, Users, DollarSign, AlertCircle, MessageSquare, ArrowLeft } from "lucide-react";
+import { CheckCircle, XCircle, Eye, Download, Calendar, Users, DollarSign, AlertCircle, MessageSquare, ArrowLeft, User, Clock, FileText, Send } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 import { AsyncState } from "../components/AsyncState";

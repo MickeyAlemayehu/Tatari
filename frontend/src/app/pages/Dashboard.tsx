@@ -66,7 +66,14 @@ export function Dashboard() {
     }).catch(() => {});
   }, []);
 
-  const stats = [
+  const stats: {
+    title: string;
+    value: string;
+    change: string;
+    trend: "up" | "down" | "neutral";
+    icon: typeof Users;
+    color: "indigo" | "green" | "amber" | "purple";
+  }[] = [
     { title: "Total Employees", value: String(totalEmployees), change: "Active workforce", trend: "neutral" as const, icon: Users, color: "indigo" },
     { title: "Pending Leave", value: String(pendingLeave), change: "Awaiting approval", trend: "neutral" as const, icon: Calendar, color: "amber" },
     { title: "Open Jobs", value: String(activeJobs), change: "Currently hiring", trend: "neutral" as const, icon: Briefcase, color: "green" },

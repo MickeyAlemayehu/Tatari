@@ -3,11 +3,15 @@ import type { ListResponse } from "../types/api";
 
 export interface EvaluationPeriodRecord {
   id: number;
+  title?: string;
   name: string;
   startDate?: string;
   endDate?: string;
   status: string;
   assignmentsCount?: number;
+  completed?: number;
+  totalEmployees?: number;
+  progress?: number;
 }
 
 export interface EvaluationAssignmentRecord {

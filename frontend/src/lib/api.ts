@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.VITE_API_URL ?? "/api";
 
 export class ApiError extends Error {
   status: number;
-  errors?: Record<string, string[]>;
+  errors?: Record<string, string[]> | undefined;
 
   constructor(message: string, status: number, errors?: Record<string, string[]>) {
     super(message);
@@ -73,19 +73,21 @@ export const api = {
   get: <T>(path: string, options?: RequestOptions) =>
     apiRequest<T>(path, { ...options, method: "GET" }),
 
-  post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
-    apiRequest<T>(path, {
-      ...options,
-      method: "POST",
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    }),
+  post: <T>(path: string, body?: unknown, options?: RequestOptions) => {
+    const requestOptions: RequestOptions = { ...options, method: "POST" };
+    if (body !== undefined) {
+      requestOptions.body = JSON.stringify(body);
+    }
+    return apiRequest<T>(path, requestOptions);
+  },
 
-  patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
-    apiRequest<T>(path, {
-      ...options,
-      method: "PATCH",
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    }),
+  patch: <T>(path: string, body?: unknown, options?: RequestOptions) => {
+    const requestOptions: RequestOptions = { ...options, method: "PATCH" };
+    if (body !== undefined) {
+      requestOptions.body = JSON.stringify(body);
+    }
+    return apiRequest<T>(path, requestOptions);
+  },
 
   delete: <T>(path: string, options?: RequestOptions) =>
     apiRequest<T>(path, { ...options, method: "DELETE" }),

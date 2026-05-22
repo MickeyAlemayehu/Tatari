@@ -24,9 +24,11 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { useAuth } from "../../contexts/AuthContext";
 
 export function PerformanceManagement() {
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
   const [evaluationPeriods, setEvaluationPeriods] = useState<EvaluationPeriodRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export function PerformanceManagement() {
       icon: FileText,
       color: "from-[#4F46E5] to-[#4338CA]",
       path: "/performance/builder",
+      permission: "performance_create",
     },
     {
       id: 2,
@@ -72,6 +75,7 @@ export function PerformanceManagement() {
       icon: UserPlus,
       color: "from-[#22C55E] to-[#22C55E]",
       path: "/performance/assign-peers",
+      permission: "performance_create",
     },
     {
       id: 3,
@@ -80,6 +84,7 @@ export function PerformanceManagement() {
       icon: BarChart3,
       color: "from-[#F59E0B] to-[#F59E0B]",
       path: "/performance/results-table",
+      permission: "manage_performance_reviews",
     },
     {
       id: 4,
@@ -88,6 +93,7 @@ export function PerformanceManagement() {
       icon: List,
       color: "from-[#06B6D4] to-[#06B6D4]",
       path: "/performance/structure",
+      permission: "performance_create",
     },
   ];
 
@@ -172,7 +178,7 @@ export function PerformanceManagement() {
           <div className="mb-6">
             <h2 className="text-sm text-[#111827] mb-4">Quick Actions</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {quickActions.map((action) => {
+              {quickActions.filter((action) => hasPermission(action.permission)).map((action) => {
                 const Icon = action.icon;
                 return (
                   <button
@@ -199,10 +205,10 @@ export function PerformanceManagement() {
                 <h2 className="text-sm text-[#111827]">Evaluation Periods</h2>
               </div>
               <button
-                onClick={() => navigate("/performance/periods")}
+                onClick={() => navigate("/performance/create")}
                 className="text-sm text-[#4F46E5] hover:text-indigo-700 transition"
               >
-                View All
+                New Period
               </button>
             </div>
             <div className="p-6 space-y-4">
@@ -268,12 +274,14 @@ export function PerformanceManagement() {
                       >
                         View Results
                       </button>
-                      <button
-                        onClick={() => navigate("/performance/assign-peers")}
-                        className="flex-1 px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm"
-                      >
-                        Assign Evaluators
-                      </button>
+                      {hasPermission("performance_create") && (
+                        <button
+                          onClick={() => navigate("/performance/assign-peers")}
+                          className="flex-1 px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm"
+                        >
+                          Assign Evaluators
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

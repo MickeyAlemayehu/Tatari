@@ -1,26 +1,14 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { CheckCircle, XCircle, Eye, Building, Calendar, Users, AlertCircle, Clock, Mail, Phone, ArrowLeft, Filter, Search, Briefcase, MapPin, UserCheck, Globe, FileText, X, UserPlus } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { ApiError } from "../../lib/api";
+import { companiesService, type CompanyRecord } from "../../services/companies.service";
 
-interface CompanyRequest {
+interface CompanyRequest extends CompanyRecord {
   id: number;
-  companyName: string;
-  industry: string;
-  size: string;
-  country: string;
-  city: string;
-  website: string;
-  contactName: string;
-  contactEmail: string;
-  contactPhone: string;
-  jobTitle: string;
-  employeeCount: number;
-  requestDate: string;
   status: "pending" | "approved" | "rejected";
-  description: string;
-  registrationNumber?: string;
 }
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
@@ -28,98 +16,9 @@ type StatusFilter = "all" | "pending" | "approved" | "rejected";
 export function AdminCompanyRequests() {
   const navigate = useNavigate();
   
-  const [companies, setCompanies] = useState<CompanyRequest[]>([
-    {
-      id: 1,
-      companyName: "TechCorp Solutions",
-      industry: "Technology",
-      size: "Medium (50-200)",
-      country: "United States",
-      city: "San Francisco",
-      website: "www.techcorp.com",
-      contactName: "John Smith",
-      contactEmail: "john.smith@techcorp.com",
-      contactPhone: "+1 (555) 123-4567",
-      jobTitle: "HR Director",
-      employeeCount: 150,
-      requestDate: "2026-03-20 10:30 AM",
-      status: "pending",
-      description: "We are a rapidly growing tech company looking to streamline our HR processes with your platform.",
-      registrationNumber: "US-TC-2026-001",
-    },
-    {
-      id: 2,
-      companyName: "Global Finance Group",
-      industry: "Finance",
-      size: "Large (200-1000)",
-      country: "United Kingdom",
-      city: "London",
-      website: "www.globalfinance.co.uk",
-      contactName: "Emma Thompson",
-      contactEmail: "e.thompson@globalfinance.co.uk",
-      contactPhone: "+44 20 7123 4567",
-      jobTitle: "Chief People Officer",
-      employeeCount: 450,
-      requestDate: "2026-03-19 02:15 PM",
-      status: "pending",
-      description: "International finance firm seeking comprehensive HR management solution for our European operations.",
-      registrationNumber: "UK-GF-2026-002",
-    },
-    {
-      id: 3,
-      companyName: "HealthPlus Medical",
-      industry: "Healthcare",
-      size: "Medium (50-200)",
-      country: "Canada",
-      city: "Toronto",
-      website: "www.healthplus.ca",
-      contactName: "Dr. Sarah Johnson",
-      contactEmail: "s.johnson@healthplus.ca",
-      contactPhone: "+1 (416) 555-9876",
-      jobTitle: "Operations Manager",
-      employeeCount: 85,
-      requestDate: "2026-03-18 09:45 AM",
-      status: "approved",
-      description: "Medical clinic network looking to modernize our employee management and payroll systems.",
-      registrationNumber: "CA-HP-2026-003",
-    },
-    {
-      id: 4,
-      companyName: "RetailMax Inc",
-      industry: "Retail",
-      size: "Large (200-1000)",
-      country: "Australia",
-      city: "Sydney",
-      website: "www.retailmax.com.au",
-      contactName: "Michael Chen",
-      contactEmail: "m.chen@retailmax.com.au",
-      contactPhone: "+61 2 9876 5432",
-      jobTitle: "HR Manager",
-      employeeCount: 320,
-      requestDate: "2026-03-17 04:20 PM",
-      status: "approved",
-      description: "Retail chain expanding operations and need scalable HR solution for multiple locations.",
-      registrationNumber: "AU-RM-2026-004",
-    },
-    {
-      id: 5,
-      companyName: "EduLearn Academy",
-      industry: "Education",
-      size: "Small (10-50)",
-      country: "Singapore",
-      city: "Singapore",
-      website: "www.edulearn.sg",
-      contactName: "Lisa Wong",
-      contactEmail: "lisa@edulearn.sg",
-      contactPhone: "+65 6123 4567",
-      jobTitle: "Administrator",
-      employeeCount: 35,
-      requestDate: "2026-03-16 11:00 AM",
-      status: "rejected",
-      description: "Educational institution looking for HR management tools.",
-      registrationNumber: "SG-EL-2026-005",
-    },
-  ]);
+  const [companies, setCompanies] = useState<CompanyRequest[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [selectedFilter, setSelectedFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
@@ -128,6 +27,17 @@ export function AdminCompanyRequests() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+
+  useEffect(() => {
+    setIsLoading(true);
+    companiesService
+      .list({ per_page: 100 })
+      .then((res) => setCompanies(res.data.filter((company): company is CompanyRequest =>
+        company.status === "pending" || company.status === "approved" || company.status === "rejected"
+      )))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Failed to load companies."))
+      .finally(() => setIsLoading(false));
+  }, []);
 
   // Filter companies
   const filteredCompanies = companies.filter(company => {
@@ -146,31 +56,34 @@ export function AdminCompanyRequests() {
   const rejectedCount = companies.filter(c => c.status === "rejected").length;
 
   // Handle approve
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedCompany) return;
     
     setIsProcessing(true);
-    
-    setTimeout(() => {
-      setCompanies(companies.map(c => 
-        c.id === selectedCompany.id ? { ...c, status: "approved" } : c
+    try {
+      const updated = await companiesService.update(selectedCompany.id, { status: "approved" });
+      setCompanies(companies.map(c =>
+        c.id === selectedCompany.id ? { ...c, ...updated, status: "approved" } : c
       ));
       setIsProcessing(false);
       setShowApproveModal(false);
       setSelectedCompany(null);
-    }, 1000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to approve company.");
+      setIsProcessing(false);
+    }
   };
 
   // Handle reject
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!selectedCompany || !rejectReason.trim()) {
       alert("Please provide a reason for rejection");
       return;
     }
     
     setIsProcessing(true);
-    
-    setTimeout(() => {
+    try {
+      await companiesService.update(selectedCompany.id, { status: "rejected" });
       setCompanies(companies.map(c => 
         c.id === selectedCompany.id ? { ...c, status: "rejected" } : c
       ));
@@ -178,7 +91,10 @@ export function AdminCompanyRequests() {
       setShowRejectModal(false);
       setSelectedCompany(null);
       setRejectReason("");
-    }, 1000);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to reject company.");
+      setIsProcessing(false);
+    }
   };
 
   // Get status badge
@@ -324,8 +240,18 @@ export function AdminCompanyRequests() {
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-7xl mx-auto">
+            {error && (
+              <div className="mb-4 rounded-lg border border-[#EF4444]/20 bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
+                {error}
+              </div>
+            )}
+            {isLoading && (
+              <div className="mb-4 flex justify-center py-10">
+                <div className="w-10 h-10 border-4 border-[#4F46E5] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
             {/* Empty State */}
-            {filteredCompanies.length === 0 && (
+            {!isLoading && filteredCompanies.length === 0 && (
               <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
                 <div className="w-20 h-20 bg-[#F9FAFB] rounded-full flex items-center justify-center mx-auto mb-4">
                   <Building className="w-10 h-10 text-[#6B7280]" />
@@ -509,10 +435,9 @@ export function AdminCompanyRequests() {
             <div className="bg-[#DCFCE7] border border-green-200 rounded-lg p-4 mb-6">
               <p className="text-sm text-[#22C55E] mb-2">Upon approval, the following will happen:</p>
               <ul className="text-sm text-green-800 space-y-1 list-disc list-inside">
-                <li>Company account will be activated</li>
-                <li>Welcome email will be sent to {selectedCompany.contactEmail}</li>
-                <li>Company admin portal access will be granted</li>
-                <li>{selectedCompany.contactName} will receive login credentials</li>
+                <li>Company request status will be marked as approved</li>
+                <li>The updated status will be saved in the database</li>
+                <li>{selectedCompany.contactName} remains listed as the primary contact</li>
               </ul>
             </div>
 

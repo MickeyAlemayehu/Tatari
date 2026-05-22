@@ -5,6 +5,7 @@ import type { Paginated } from "../types/api";
 export interface EmployeeRecord extends Employee {
   position: string;
   department?: { id: number; name: string } | null;
+  manager?: { id?: number; first_name?: string; last_name?: string } | null;
   created_at?: string;
 }
 

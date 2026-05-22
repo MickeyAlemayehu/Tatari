@@ -10,13 +10,14 @@ import {
   Briefcase,
   Clock,
   DollarSign,
-  Edit,
   Trash2,
   Users,
   Calendar,
   Eye,
   CheckCircle,
   Share2,
+  Star,
+  XCircle,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
@@ -30,8 +31,10 @@ interface Applicant {
   status: "new" | "reviewing" | "shortlisted" | "rejected" | "hired";
   experience: string;
   avatar: string;
-  rating?: number;
+  rating?: number | undefined;
 }
+
+type JobStatus = "open" | "closed" | "draft" | "on-hold";
 
 type JobView = {
   id: number;
@@ -39,7 +42,7 @@ type JobView = {
   department: string;
   location: string;
   type: string;
-  status: string;
+  status: JobStatus;
   postedDate: string;
   closingDate: string;
   salary: string;
@@ -63,7 +66,7 @@ function mapJob(j: JobRecord): JobView {
     department: j.department ?? "—",
     location: j.location ?? "—",
     type: j.type ?? j.employment_type ?? "Full-time",
-    status: j.status ?? "open",
+    status: (j.status as JobStatus | undefined) ?? "open",
     postedDate: j.postedDate ?? "",
     closingDate: j.closingDate ?? "",
     salary,
@@ -81,7 +84,7 @@ function mapApplicant(a: ApplicantRecord): Applicant {
   const parts = name.split(" ");
   const avatar =
     parts.length >= 2
-      ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+      ? `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase()
       : name.slice(0, 2).toUpperCase();
   return {
     id: a.id,
@@ -132,7 +135,7 @@ export function JobDetails() {
   }
 
   // Status badge styling
-  const getStatusBadge = (status: typeof job.status) => {
+  const getStatusBadge = (status: JobStatus) => {
     const styles = {
       open: "bg-[#DCFCE7] text-[#22C55E] border-green-200",
       closed: "bg-[#F9FAFB] text-[#111827] border-[#E5E7EB]",
@@ -215,13 +218,6 @@ export function JobDetails() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate(`/jobs/${id}/edit`)}
-                className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition"
-              >
-                <Edit className="w-4 h-4" />
-                <span className="hidden sm:inline">Edit</span>
-              </button>
               <button className="flex items-center gap-2 px-4 py-2 border border-[#EF4444]/20 text-[#EF4444] rounded-lg hover:bg-[#FEF2F2] transition">
                 <Trash2 className="w-4 h-4" />
                 <span className="hidden sm:inline">Delete</span>

@@ -8,15 +8,18 @@ use Symfony\Component\HttpFoundation\Response;
 
 class CheckEmployeePermission
 {
-    public function handle(Request $request, Closure $next, int $requiredLevel = 0, ?string $permission = null): Response
+    /**
+     * Require an authenticated employee with a specific permission (from level config + overrides).
+     */
+    public function handle(Request $request, Closure $next, string $permission): Response
     {
         $employee = $request->user('api') ?? $request->user();
 
-        if (! $employee || ! $employee->hasRequiredLevel($requiredLevel)) {
-            abort(Response::HTTP_FORBIDDEN, 'Insufficient permission level.');
+        if (! $employee) {
+            abort(Response::HTTP_UNAUTHORIZED, 'Unauthenticated.');
         }
 
-        if ($permission !== null && ! $employee->hasPermission($permission, $requiredLevel)) {
+        if (! $employee->hasPermission($permission)) {
             abort(Response::HTTP_FORBIDDEN, 'Permission denied.');
         }
 

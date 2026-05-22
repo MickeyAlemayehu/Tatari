@@ -28,11 +28,14 @@ class EmployeeController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:employees,email'],
             'password' => ['required', 'string', 'min:8'],
             'position' => ['required', 'string', 'max:150'],
-            'permission_level' => ['required', 'integer', 'between:1,10'],
+            'permission_level' => ['sometimes', 'integer', 'between:1,3'],
             'permission_override' => ['sometimes', 'array'],
+            'custom_override' => ['sometimes', 'array'],
             'revoked_permissions' => ['sometimes', 'array'],
             'status' => ['sometimes', 'in:active,inactive'],
         ]);
+
+        $data['permission_level'] = $data['permission_level'] ?? config('permission_levels.default_level', 1);
 
         $employee = Employee::create($data);
 
@@ -52,8 +55,9 @@ class EmployeeController extends Controller
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('employees', 'email')->ignore($employee->id)],
             'password' => ['sometimes', 'string', 'min:8'],
             'position' => ['sometimes', 'string', 'max:150'],
-            'permission_level' => ['sometimes', 'integer', 'between:1,10'],
+            'permission_level' => ['sometimes', 'integer', 'between:1,3'],
             'permission_override' => ['sometimes', 'array'],
+            'custom_override' => ['sometimes', 'array'],
             'revoked_permissions' => ['sometimes', 'array'],
             'status' => ['sometimes', 'in:active,inactive'],
         ]);

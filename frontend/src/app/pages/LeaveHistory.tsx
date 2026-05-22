@@ -62,7 +62,7 @@ export function LeaveHistory() {
               <p className="text-sm text-[#6B7280]">View and manage all leave requests</p>
             </div>
             <button
-              onClick={() => navigate("/leave/request")}
+              onClick={() => navigate("/employee/leave?tab=requests")}
               className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
             >
               <Download className="w-5 h-5" />

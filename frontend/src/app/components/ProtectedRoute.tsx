@@ -1,15 +1,14 @@
 import { Navigate, useLocation } from "react-router";
 import { useAuth } from "../../contexts/AuthContext";
-import { canAccessPortal, getLoginPath } from "../../lib/portal-access";
-import type { Portal } from "../../types/employee";
+import { getDefaultDashboard, getLoginPath } from "../../lib/portal-access";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  portal: Portal;
+  permission: string;
 }
 
-export function ProtectedRoute({ children, portal }: ProtectedRouteProps) {
-  const { employee, isLoading, isAuthenticated, portal: activePortal } = useAuth();
+export function ProtectedRoute({ children, permission }: ProtectedRouteProps) {
+  const { employee, isLoading, isAuthenticated, hasPermission } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -24,11 +23,24 @@ export function ProtectedRoute({ children, portal }: ProtectedRouteProps) {
   }
 
   if (!isAuthenticated || !employee) {
-    return <Navigate to={getLoginPath(portal)} state={{ from: location }} replace />;
+    return <Navigate to={getLoginPath()} state={{ from: location }} replace />;
   }
 
-  if (activePortal !== portal || !canAccessPortal(employee, portal)) {
-    return <Navigate to="/" replace />;
+  if (!hasPermission(permission)) {
+    if (location.key === "default") {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#F9FAFB] px-4">
+          <div className="max-w-md rounded-lg border border-[#E5E7EB] bg-white p-6 text-center shadow-sm">
+            <h1 className="text-lg text-[#111827]">Access denied</h1>
+            <p className="mt-2 text-sm text-[#6B7280]">
+              You do not have permission to view this page.
+            </p>
+          </div>
+        </div>
+      );
+    }
+
+    return <Navigate to={getDefaultDashboard(employee)} replace />;
   }
 
   return <>{children}</>;

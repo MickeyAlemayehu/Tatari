@@ -1,15 +1,12 @@
 import type { ReactNode } from "react";
-import { AuthOnlyRoute } from "../app/components/AuthOnlyRoute";
 import { ProtectedRoute } from "../app/components/ProtectedRoute";
-import type { Portal } from "../types/employee";
 
-function guard(portal: Portal, element: ReactNode) {
-  return <ProtectedRoute portal={portal}>{element}</ProtectedRoute>;
+function guard(permission: string, element: ReactNode) {
+  return <ProtectedRoute permission={permission}>{element}</ProtectedRoute>;
 }
 
-export const employee = (element: ReactNode) => guard("employee", element);
-export const hr = (element: ReactNode) => guard("hr", element);
-export const admin = (element: ReactNode) => guard("admin", element);
-export const authenticated = (element: ReactNode) => (
-  <AuthOnlyRoute>{element}</AuthOnlyRoute>
-);
+export const employee = (element: ReactNode) => guard("access_employee_portal", element);
+export const hr = (element: ReactNode) => guard("access_hr_portal", element);
+export const admin = (element: ReactNode) => guard("access_admin_portal", element);
+export const permitted = (permission: string, element: ReactNode) => guard(permission, element);
+export const authenticated = (element: ReactNode) => guard("access_employee_portal", element);

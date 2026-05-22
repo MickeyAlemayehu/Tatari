@@ -3,7 +3,7 @@ interface AsyncStateProps {
   error: string | null;
   empty?: boolean;
   emptyMessage?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }
 
 export function AsyncState({

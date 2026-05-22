@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\EmployeePermissions;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -27,27 +28,31 @@ class Employee extends Authenticatable
         'must_change_password' => 'boolean'
     ];
 
-    public function hasRequiredLevel(int $requiredLevel): bool
+    protected static function booted(): void
     {
-        return $this->permission_level >= $requiredLevel;
+        static::creating(function (Employee $employee) {
+            if ($employee->permission_level === null) {
+                $employee->permission_level = config('permission_levels.default_level', 1);
+            }
+            $employee->permission_level = EmployeePermissions::normalizeLevel((int) $employee->permission_level);
+        });
+
+        static::updating(function (Employee $employee) {
+            if ($employee->isDirty('permission_level')) {
+                $employee->permission_level = EmployeePermissions::normalizeLevel((int) $employee->permission_level);
+            }
+        });
     }
 
-    public function hasPermission(string $permission, ?int $requiredLevel = null): bool
+    public function hasPermission(string $permission): bool
     {
-        $revokedPermissions = $this->revoked_permissions ?? [];
-        if (in_array($permission, $revokedPermissions, true)) {
-            return false;
-        }
+        return in_array($permission, EmployeePermissions::effectivePermissions($this), true);
+    }
 
-        $overrides = $this->permission_override
-            ?? $this->custom_override
-            ?? $this->getAttribute('custom_overide')
-            ?? [];
-        if (array_key_exists($permission, $overrides)) {
-            return (bool) $overrides[$permission];
-        }
-
-        return $requiredLevel === null ? true : $this->hasRequiredLevel($requiredLevel);
+    /** @deprecated Use hasPermission() — level thresholds are no longer used. */
+    public function hasRequiredLevel(int $requiredLevel): bool
+    {
+        return EmployeePermissions::normalizeLevel((int) $this->permission_level) >= EmployeePermissions::normalizeLevel($requiredLevel);
     }
 
     public function department() {

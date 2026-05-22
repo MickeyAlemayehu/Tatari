@@ -1,63 +1,33 @@
 import type { Employee, Portal } from "../types/employee";
+import { hasEmployeePermission } from "./permissions";
 
-function hasPermission(employee: Employee, permission: string): boolean {
-  const revoked = employee.revoked_permissions ?? [];
-  if (revoked.includes(permission)) {
-    return false;
-  }
-
-  const overrides = employee.permission_override ?? {};
-  if (permission in overrides) {
-    return Boolean(overrides[permission]);
-  }
-
-  return false;
+export function employeeHasPermission(employee: Employee, permission: string): boolean {
+  return hasEmployeePermission(employee, permission);
 }
 
 export function canAccessPortal(employee: Employee, portal: Portal): boolean {
   switch (portal) {
-    case "employee":
-      return (
-        employee.permission_level < 6 &&
-        !hasPermission(employee, "manage_employees") &&
-        !hasPermission(employee, "manage_payroll")
-      );
-    case "hr":
-      return (
-        employee.permission_level >= 4 ||
-        hasPermission(employee, "manage_employees") ||
-        hasPermission(employee, "manage_payroll") ||
-        hasPermission(employee, "approve_leave")
-      );
     case "admin":
-      return employee.permission_level >= 10;
+      return employeeHasPermission(employee, "access_admin_portal");
+    case "hr":
+      return employeeHasPermission(employee, "access_hr_portal");
+    case "employee":
+      return employeeHasPermission(employee, "access_employee_portal");
     default:
       return false;
   }
 }
 
-export function getDefaultDashboard(portal: Portal): string {
-  switch (portal) {
-    case "employee":
-      return "/employee/dashboard";
-    case "hr":
-      return "/hr/dashboard";
-    case "admin":
-      return "/admin/dashboard";
-    default:
-      return "/";
+export function getDefaultDashboard(employee: Employee): string {
+  if (employee.landing_path) {
+    return employee.landing_path;
   }
+
+  if (employee.portal === "admin") return "/admin/dashboard";
+  if (employee.portal === "hr") return "/hr/dashboard";
+  return "/employee/dashboard";
 }
 
-export function getLoginPath(portal: Portal): string {
-  switch (portal) {
-    case "employee":
-      return "/employee/login";
-    case "hr":
-      return "/hr/login";
-    case "admin":
-      return "/admin/login";
-    default:
-      return "/";
-  }
+export function getLoginPath(): string {
+  return "/login";
 }

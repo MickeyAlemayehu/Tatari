@@ -109,7 +109,7 @@ class LeaveManagementController extends Controller
     {
         $employee = $this->employee($request);
 
-        if ($leaveRequest->employee_id !== $employee->id && ! $employee->hasPermission('approve_leave', 4)) {
+        if ($leaveRequest->employee_id !== $employee->id && ! $employee->hasPermission('approve_leave')) {
             abort(Response::HTTP_FORBIDDEN, 'Not allowed to view this leave request.');
         }
 

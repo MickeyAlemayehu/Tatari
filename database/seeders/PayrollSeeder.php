@@ -23,10 +23,9 @@ class PayrollSeeder extends Seeder
             ->whereHas('department', fn ($query) => $query->where('company_id', $company->id))
             ->get()
             ->each(function (Employee $employee) use ($company): void {
-                $salary = match (true) {
-                    $employee->permission_level >= 8 => 12000,
-                    $employee->permission_level >= 6 => 9500,
-                    $employee->permission_level >= 4 => 7600,
+                $salary = match ((int) $employee->permission_level) {
+                    3 => 12000,
+                    2 => 9500,
                     default => 6200,
                 };
 

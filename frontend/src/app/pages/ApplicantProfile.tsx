@@ -28,6 +28,26 @@ import {
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 
+type ApplicantStatus = "new" | "reviewing" | "shortlisted" | "rejected" | "hired";
+
+interface ResumeExperience {
+  company: string;
+  role: string;
+  title: string;
+  duration: string;
+  period: string;
+  description: string;
+  highlights: string[];
+  achievements: string[];
+}
+
+interface ResumeEducation {
+  degree: string;
+  school: string;
+  year: string;
+  gpa?: string;
+}
+
 export function ApplicantProfile() {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -49,7 +69,7 @@ export function ApplicantProfile() {
     jobId: 0,
     department: "",
     appliedDate: "",
-    status: "new" as string,
+    status: "new" as ApplicantStatus,
     experience: "",
     currentCompany: "",
     currentRole: "",
@@ -61,8 +81,9 @@ export function ApplicantProfile() {
     coverLetter: "",
     resumeHighlights: {
       summary: "",
-      experience: [] as { company: string; role: string; duration: string; highlights: string[] }[],
-      education: [] as { degree: string; school: string; year: string }[],
+      experience: [] as ResumeExperience[],
+      education: [] as ResumeEducation[],
+      certifications: [] as string[],
     },
   });
 
@@ -75,7 +96,7 @@ export function ApplicantProfile() {
         const parts = name.split(" ");
         const avatar =
           parts.length >= 2
-            ? `${parts[0][0]}${parts[1][0]}`.toUpperCase()
+            ? `${parts[0]?.[0] ?? ""}${parts[1]?.[0] ?? ""}`.toUpperCase()
             : name.slice(0, 2).toUpperCase();
         setApplicant({
           id: a.id,
@@ -88,7 +109,7 @@ export function ApplicantProfile() {
           jobId: a.jobId ?? 0,
           department: a.department ?? "—",
           appliedDate: a.appliedDate ?? "",
-          status: a.status,
+          status: a.status as ApplicantStatus,
           experience: a.experience ?? "—",
           currentCompany: "",
           currentRole: "",
@@ -98,25 +119,25 @@ export function ApplicantProfile() {
           rating: a.rating ?? 0,
           skills: [],
           coverLetter: a.coverLetter ?? "",
-          resumeHighlights: { summary: "", experience: [], education: [] },
+          resumeHighlights: { summary: "", experience: [], education: [], certifications: [] },
         });
       })
       .catch(() => setLoadError("Failed to load applicant"))
       .finally(() => setLoading(false));
   }, [id]);
 
-  const updateStatus = async (status: string) => {
+  const updateStatus = async (status: ApplicantStatus) => {
     if (!id) return;
     try {
       const updated = await applicantsService.update(Number(id), { status });
-      setApplicant((prev) => ({ ...prev, status: updated.status }));
+      setApplicant((prev) => ({ ...prev, status: updated.status as ApplicantStatus }));
     } catch (e) {
       alert(e instanceof ApiError ? e.message : "Failed to update status");
     }
   };
 
   // Status badge styling
-  const getStatusBadge = (status: typeof applicant.status) => {
+  const getStatusBadge = (status: ApplicantStatus) => {
     const styles = {
       new: "bg-blue-100 text-blue-700 border-[#06B6D4]/20",
       reviewing: "bg-[#EEF2FF] text-[#4F46E5] border-purple-200",

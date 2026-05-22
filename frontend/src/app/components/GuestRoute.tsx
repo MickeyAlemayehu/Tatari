@@ -1,15 +1,13 @@
 import { Navigate } from "react-router";
 import { useAuth } from "../../contexts/AuthContext";
 import { getDefaultDashboard } from "../../lib/portal-access";
-import type { Portal } from "../../types/employee";
 
 interface GuestRouteProps {
   children: React.ReactNode;
-  portal: Portal;
 }
 
-export function GuestRoute({ children, portal }: GuestRouteProps) {
-  const { isAuthenticated, isLoading, portal: activePortal } = useAuth();
+export function GuestRoute({ children }: GuestRouteProps) {
+  const { isAuthenticated, isLoading, employee } = useAuth();
 
   if (isLoading) {
     return (
@@ -19,8 +17,8 @@ export function GuestRoute({ children, portal }: GuestRouteProps) {
     );
   }
 
-  if (isAuthenticated && activePortal === portal) {
-    return <Navigate to={getDefaultDashboard(portal)} replace />;
+  if (isAuthenticated && employee) {
+    return <Navigate to={getDefaultDashboard(employee)} replace />;
   }
 
   return <>{children}</>;

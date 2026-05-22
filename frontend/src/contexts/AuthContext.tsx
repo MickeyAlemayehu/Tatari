@@ -8,8 +8,8 @@ import {
   type ReactNode,
 } from "react";
 import { ApiError } from "../lib/api";
-import { canAccessPortal } from "../lib/portal-access";
-import { clearSession, getStoredPortal, getStoredToken } from "../lib/auth-storage";
+import { canAccessPortal, getDefaultDashboard } from "../lib/portal-access";
+import { clearSession, getStoredPortal, getStoredToken, saveSession } from "../lib/auth-storage";
 import {
   fetchCurrentUser,
   getStoredSession,
@@ -23,9 +23,13 @@ interface AuthContextValue {
   portal: Portal | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string, portal: Portal) => Promise<AuthSession>;
+  login: (email: string, password: string) => Promise<AuthSession>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  effectivePermissions: string[];
+  permissionLevel: number | null;
+  landingPath: string;
+  hasPermission: (permission: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -47,20 +51,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const user = await fetchCurrentUser();
-      if (!user || !canAccessPortal(user, storedPortal)) {
+      const resolvedPortal = (user?.portal as Portal | null | undefined) ?? storedPortal;
+
+      if (!user || !resolvedPortal || !canAccessPortal(user, resolvedPortal)) {
         clearSession();
         setEmployee(null);
         setPortal(null);
         return;
       }
+
       setEmployee(user);
-      setPortal(storedPortal);
+      setPortal(resolvedPortal);
+      saveSession({ token, employee: user, portal: resolvedPortal });
     } catch (error) {
-      if (error instanceof ApiError && error.status === 401) {
-        clearSession();
-      }
+      clearSession();
       setEmployee(null);
       setPortal(null);
+      if (error instanceof ApiError && error.status !== 401) {
+        console.error("Session refresh failed:", error.message);
+      }
     }
   }, []);
 
@@ -78,30 +87,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void bootstrap();
   }, [refreshUser]);
 
-  const login = useCallback(
-    async (email: string, password: string, requestedPortal: Portal) => {
-      const session = await loginRequest(email, password, requestedPortal);
+  const login = useCallback(async (email: string, password: string) => {
+    const session = await loginRequest(email, password);
 
-      if (!canAccessPortal(session.employee, requestedPortal)) {
-        clearSession();
-        throw new ApiError(
-          "Your account does not have access to this portal. Try a different login option.",
-          403
-        );
-      }
+    if (!session.portal || !canAccessPortal(session.employee, session.portal)) {
+      clearSession();
+      throw new ApiError(
+        "Your account does not have access to the application. Contact your administrator.",
+        403
+      );
+    }
 
-      setEmployee(session.employee);
-      setPortal(session.portal);
-      return session;
-    },
-    []
-  );
+    setEmployee(session.employee);
+    setPortal(session.portal);
+    return session;
+  }, []);
 
   const logout = useCallback(async () => {
     await logoutRequest();
     setEmployee(null);
     setPortal(null);
   }, []);
+
+  const effectivePermissions = employee?.effective_permissions ?? [];
+  const permissionLevel = employee?.permission_level ?? null;
+  const landingPath = employee ? getDefaultDashboard(employee) : "/login";
+  const hasPermission = useCallback(
+    (permission: string) => effectivePermissions.includes(permission),
+    [effectivePermissions]
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -112,8 +126,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       logout,
       refreshUser,
+      effectivePermissions,
+      permissionLevel,
+      landingPath,
+      hasPermission,
     }),
-    [employee, portal, isLoading, login, logout, refreshUser]
+    [
+      employee,
+      portal,
+      isLoading,
+      login,
+      logout,
+      refreshUser,
+      effectivePermissions,
+      permissionLevel,
+      landingPath,
+      hasPermission,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

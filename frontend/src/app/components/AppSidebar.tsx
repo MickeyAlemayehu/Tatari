@@ -28,13 +28,14 @@ interface NavigationItem {
   name: string;
   icon: any;
   path: string;
+  permission: string;
   children?: NavigationItem[];
 }
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuth();
+  const { logout, hasPermission } = useAuth();
   const [expandedSections, setExpandedSections] = useState<string[]>([
     "leave-management",
     "performance",
@@ -75,49 +76,57 @@ export function AppSidebar() {
       name: "Dashboard",
       icon: Home,
       path: "/employee/dashboard",
+      permission: "access_employee_portal",
     },
     {
       name: "My Profile",
       icon: User,
       path: "/employee/profile",
+      permission: "access_employee_portal",
     },
     {
       name: "My Department",
       icon: Briefcase,
       path: "/employee/department",
+      permission: "access_employee_portal",
     },
     {
       name: "Leave Management",
       icon: Calendar,
       path: "/employee/leave",
+      permission: "access_employee_portal",
       children: [
-        { name: "My Requests", icon: FileText, path: "/employee/leave?tab=requests" },
-        { name: "Leave Balance", icon: TrendingUp, path: "/employee/leave?tab=balance" },
+        { name: "My Requests", icon: FileText, path: "/employee/leave?tab=requests", permission: "access_employee_portal" },
+        { name: "Leave Balance", icon: TrendingUp, path: "/employee/leave?tab=balance", permission: "access_employee_portal" },
       ],
     },
     {
       name: "Performance",
       icon: TrendingUp,
       path: "/employee/performance",
+      permission: "access_employee_portal",
       children: [
-        { name: "My Tasks", icon: ClipboardList, path: "/employee/performance?tab=tasks" },
-        { name: "My Results", icon: TrendingUp, path: "/employee/performance?tab=results" },
+        { name: "My Tasks", icon: ClipboardList, path: "/employee/performance?tab=tasks", permission: "access_employee_portal" },
+        { name: "My Results", icon: TrendingUp, path: "/employee/performance?tab=results", permission: "access_employee_portal" },
       ],
     },
     {
       name: "Equipment",
       icon: Laptop,
       path: "/employee/equipment",
+      permission: "access_employee_portal",
     },
     {
       name: "Payslips",
       icon: Receipt,
       path: "/employee/payslip/1",
+      permission: "access_employee_portal",
     },
     {
       name: "Notifications",
       icon: Bell,
       path: "/employee/notifications",
+      permission: "access_employee_portal",
     },
   ];
 
@@ -127,58 +136,66 @@ export function AppSidebar() {
       name: "Dashboard",
       icon: Home,
       path: "/hr/dashboard",
+      permission: "access_hr_portal",
     },
     {
       name: "Employee Management",
       icon: Users,
       path: "/employees",
+      permission: "manage_employees",
       children: [
-        { name: "Employees", icon: Users, path: "/employees" },
-        { name: "Add Employee", icon: UserPlus, path: "/employees/new" },
-        { name: "Import Employees", icon: Upload, path: "/employees/import" },
+        { name: "Employees", icon: Users, path: "/employees", permission: "manage_employees" },
+        { name: "Add Employee", icon: UserPlus, path: "/employees/new", permission: "manage_employees" },
+        { name: "Import Employees", icon: Upload, path: "/employees/import", permission: "manage_employees" },
       ],
     },
     {
       name: "Departments",
       icon: Briefcase,
       path: "/departments",
+      permission: "manage_employees",
     },
     {
       name: "Leave Management",
       icon: Calendar,
       path: "/leave",
+      permission: "approve_leave",
       children: [
-        { name: "All Requests", icon: FileText, path: "/leave?tab=history" },
-        { name: "Approval", icon: Calendar, path: "/leave?tab=approvals" },
+        { name: "All Requests", icon: FileText, path: "/leave?tab=history", permission: "approve_leave" },
+        { name: "Approval", icon: Calendar, path: "/leave?tab=approvals", permission: "approve_leave" },
       ],
     },
     {
       name: "Performance",
       icon: TrendingUp,
       path: "/performance",
+      permission: "manage_performance_reviews",
       children: [
-        { name: "Evaluation Dashboard", icon: TrendingUp, path: "/performance" },
-        { name: "Assign Evaluators", icon: Users, path: "/performance/assign-peers" },
+        { name: "Evaluation Dashboard", icon: TrendingUp, path: "/performance", permission: "manage_performance_reviews" },
+        { name: "Assign Evaluators", icon: Users, path: "/performance/assign-peers", permission: "performance_create" },
       ],
     },
     {
       name: "Recruitment",
       icon: Briefcase,
       path: "/jobs",
+      permission: "manage_employees",
       children: [
-        { name: "Job Vacancies", icon: Briefcase, path: "/jobs" },
-        { name: "Applicants", icon: Users, path: "/applicants" },
+        { name: "Job Vacancies", icon: Briefcase, path: "/jobs", permission: "manage_employees" },
+        { name: "Applicants", icon: Users, path: "/applicants", permission: "manage_employees" },
       ],
     },
     {
       name: "Payroll",
       icon: DollarSign,
       path: "/payroll",
+      permission: "manage_payroll",
     },
     {
       name: "Notifications",
       icon: Bell,
       path: "/notifications",
+      permission: "access_employee_portal",
     },
   ];
 
@@ -188,31 +205,37 @@ export function AppSidebar() {
       name: "Dashboard",
       icon: Home,
       path: "/admin/dashboard",
+      permission: "access_admin_portal",
     },
     {
       name: "Company Management",
       icon: Building2,
       path: "/admin/companies",
+      permission: "access_admin_portal",
     },
     {
       name: "User Management",
       icon: Users,
       path: "/admin/users",
+      permission: "access_admin_portal",
     },
     {
       name: "Role Management",
       icon: Shield,
       path: "/admin/roles",
+      permission: "access_admin_portal",
     },
     {
       name: "System Settings",
       icon: Settings,
       path: "/admin/settings",
+      permission: "access_admin_portal",
     },
     {
       name: "Audit Logs",
       icon: FileText,
       path: "/admin/logs",
+      permission: "access_admin_portal",
     },
   ];
 
@@ -223,6 +246,13 @@ export function AppSidebar() {
       : currentRole === "admin"
       ? adminNavigation
       : hrNavigation;
+
+  const permittedNavigation = navigation
+    .filter((item) => hasPermission(item.permission))
+    .map((item): NavigationItem => {
+      const children = item.children?.filter((child) => hasPermission(child.permission));
+      return children ? { ...item, children } : { ...item };
+    });
 
   const handleLogout = async () => {
     await logout();
@@ -299,11 +329,11 @@ export function AppSidebar() {
       {/* Main Navigation */}
       <nav className="flex-1 px-4 py-6 overflow-y-auto">
         <div className="space-y-1">
-          {navigation.map((item) => renderNavItem(item))}
+          {permittedNavigation.map((item) => renderNavItem(item))}
         </div>
 
         {/* Settings for Employee */}
-        {currentRole === "employee" && (
+        {currentRole === "employee" && hasPermission("access_employee_portal") && (
           <div className="mt-8 pt-6 border-t border-[rgba(255,255,255,0.1)]">
             <button
               onClick={() => navigate("/employee/settings")}

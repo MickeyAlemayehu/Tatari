@@ -1,5 +1,6 @@
 import { createBrowserRouter } from "react-router-dom";
-import { RoleSelection } from "../app/pages/RoleSelection";
+import { Navigate } from "react-router";
+import { Login } from "../app/pages/Login";
 import { EmployeeLogin } from "../app/pages/EmployeeLogin";
 import { HRLogin } from "../app/pages/HRLogin";
 import { AdminLogin } from "../app/pages/AdminLogin";
@@ -54,11 +55,12 @@ import { AuditLogs } from "../app/pages/AuditLogs";
 import { Help } from "../app/pages/Help";
 import { Profile } from "../app/pages/Profile";
 import { NotFound } from "../app/pages/NotFound";
-import { admin, authenticated, employee, hr } from "./guards";
+import { admin, authenticated, employee, hr, permitted } from "./guards";
 
 export const router = createBrowserRouter([
-  { path: "/", element: <RoleSelection /> },
-  { path: "/select-role", element: <RoleSelection /> },
+  { path: "/", element: <Navigate to="/login" replace /> },
+  { path: "/login", element: <Login /> },
+  { path: "/select-role", element: <Navigate to="/login" replace /> },
   { path: "/employee/login", element: <EmployeeLogin /> },
   { path: "/hr/login", element: <HRLogin /> },
   { path: "/admin/login", element: <AdminLogin /> },
@@ -84,35 +86,35 @@ export const router = createBrowserRouter([
   { path: "/profile", element: authenticated(<Profile />) },
   { path: "/notifications", element: authenticated(<Notifications />) },
 
-  { path: "/employees", element: hr(<EmployeeManagement />) },
-  { path: "/employees/new", element: hr(<CreateEmployee />) },
-  { path: "/employees/import", element: hr(<BulkImport />) },
-  { path: "/employees/:id", element: hr(<EmployeeProfile />) },
-  { path: "/departments", element: hr(<DepartmentManagement />) },
-  { path: "/departments/new", element: hr(<DepartmentForm />) },
-  { path: "/departments/:id/edit", element: hr(<DepartmentForm />) },
-  { path: "/leave", element: hr(<LeaveManagement />) },
-  { path: "/leave/:id", element: hr(<LeaveDetail />) },
-  { path: "/performance", element: hr(<PerformanceManagement />) },
-  { path: "/performance/builder", element: hr(<EvaluationBuilder />) },
-  { path: "/performance/structure", element: hr(<EvaluationStructure />) },
-  { path: "/performance/results-table", element: hr(<PerformanceResultsTable />) },
-  { path: "/performance/create", element: hr(<CreateEvaluationPeriod />) },
-  { path: "/performance/assign-peers", element: hr(<AssignPeerEvaluators />) },
-  { path: "/performance/self-evaluation", element: hr(<SelfEvaluation />) },
-  { path: "/performance/peer-evaluation/:id", element: hr(<PeerEvaluation />) },
-  { path: "/performance/manager-evaluation", element: hr(<ManagerEvaluation />) },
-  { path: "/performance/results/:id", element: hr(<PerformanceResults />) },
-  { path: "/jobs", element: hr(<JobVacancies />) },
-  { path: "/jobs/new", element: hr(<CreateJob />) },
-  { path: "/jobs/:id", element: hr(<JobDetails />) },
-  { path: "/applicants", element: hr(<ApplicantManagement />) },
-  { path: "/applicants/:id", element: hr(<ApplicantProfile />) },
-  { path: "/payroll", element: hr(<PayrollDashboard />) },
-  { path: "/payroll/generate", element: hr(<PayrollGeneration />) },
-  { path: "/payroll/import", element: hr(<PayrollImport />) },
-  { path: "/payroll/:id/review", element: hr(<PayrollReview />) },
-  { path: "/payroll/:id/approve", element: hr(<PayrollApproval />) },
+  { path: "/employees", element: permitted("manage_employees", <EmployeeManagement />) },
+  { path: "/employees/new", element: permitted("manage_employees", <CreateEmployee />) },
+  { path: "/employees/import", element: permitted("manage_employees", <BulkImport />) },
+  { path: "/employees/:id", element: permitted("manage_employees", <EmployeeProfile />) },
+  { path: "/departments", element: permitted("manage_employees", <DepartmentManagement />) },
+  { path: "/departments/new", element: permitted("manage_employees", <DepartmentForm />) },
+  { path: "/departments/:id/edit", element: permitted("manage_employees", <DepartmentForm />) },
+  { path: "/leave", element: permitted("approve_leave", <LeaveManagement />) },
+  { path: "/leave/:id", element: permitted("approve_leave", <LeaveDetail />) },
+  { path: "/performance", element: permitted("manage_performance_reviews", <PerformanceManagement />) },
+  { path: "/performance/builder", element: permitted("performance_create", <EvaluationBuilder />) },
+  { path: "/performance/structure", element: permitted("performance_create", <EvaluationStructure />) },
+  { path: "/performance/results-table", element: permitted("manage_performance_reviews", <PerformanceResultsTable />) },
+  { path: "/performance/create", element: permitted("performance_create", <CreateEvaluationPeriod />) },
+  { path: "/performance/assign-peers", element: permitted("performance_create", <AssignPeerEvaluators />) },
+  { path: "/performance/self-evaluation", element: permitted("performance_evaluate", <SelfEvaluation />) },
+  { path: "/performance/peer-evaluation/:id", element: permitted("performance_evaluate", <PeerEvaluation />) },
+  { path: "/performance/manager-evaluation", element: permitted("performance_evaluate", <ManagerEvaluation />) },
+  { path: "/performance/results/:id", element: permitted("manage_performance_reviews", <PerformanceResults />) },
+  { path: "/jobs", element: permitted("manage_employees", <JobVacancies />) },
+  { path: "/jobs/new", element: permitted("manage_employees", <CreateJob />) },
+  { path: "/jobs/:id", element: permitted("manage_employees", <JobDetails />) },
+  { path: "/applicants", element: permitted("manage_employees", <ApplicantManagement />) },
+  { path: "/applicants/:id", element: permitted("manage_employees", <ApplicantProfile />) },
+  { path: "/payroll", element: permitted("manage_payroll", <PayrollDashboard />) },
+  { path: "/payroll/generate", element: permitted("manage_payroll", <PayrollGeneration />) },
+  { path: "/payroll/import", element: permitted("manage_payroll", <PayrollImport />) },
+  { path: "/payroll/:id/review", element: permitted("manage_payroll", <PayrollReview />) },
+  { path: "/payroll/:id/approve", element: permitted("manage_payroll", <PayrollApproval />) },
   { path: "/payslip/:id", element: authenticated(<Payslip />) },
 
   // Platform admin UI (deferred backend — routes kept behind admin portal)

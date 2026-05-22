@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Save, AlertCircle, CheckCircle, Star, Send, User } from "lucide-react";
+import { ArrowLeft, Save, AlertCircle, CheckCircle, Star, Send, User, Clock, Search } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 
 interface Employee {
@@ -39,7 +39,7 @@ export function ManagerEvaluation() {
   ]);
 
   // Selected employee
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee>(employees[0]);
+  const [selectedEmployee, setSelectedEmployee] = useState<Employee>(employees[0]!);
 
   // Evaluation questions
   const [questions, setQuestions] = useState<EvaluationQuestion[]>([

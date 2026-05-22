@@ -4,7 +4,6 @@ namespace Database\Factories;
 
 use App\Models\Employee;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
@@ -20,9 +19,9 @@ class EmployeeFactory extends Factory
             'first_name' => $this->faker->firstName(),
             'last_name' => $this->faker->lastName(),
             'email' => $this->faker->unique()->safeEmail(),
-            'password' => Hash::make('Password123!'),
+            'password' => 'Password123!',
             'position' => $this->faker->jobTitle(),
-            'permission_level' => $this->faker->numberBetween(1, 10),
+            'permission_level' => $this->faker->numberBetween(1, 3),
             'permission_override' => [],
             'custom_override' => null,
             'revoked_permissions' => [],
@@ -34,11 +33,11 @@ class EmployeeFactory extends Factory
 
     public function manager(): static
     {
-        return $this->state(fn () => ['permission_level' => 6]);
+        return $this->state(fn () => ['permission_level' => 2]);
     }
 
     public function staff(): static
     {
-        return $this->state(fn () => ['permission_level' => 3]);
+        return $this->state(fn () => ['permission_level' => 1]);
     }
 }

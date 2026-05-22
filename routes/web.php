@@ -28,14 +28,14 @@ Route::middleware('auth')->group(function () {
                 'permission_level' => $employee->permission_level,
             ],
         ]);
-    })->name('dashboard');
+    })->middleware('employee.permission:access_employee_portal')->name('dashboard');
 
     Route::get('/admin/payroll', function () {
         return response()->json(['message' => 'Payroll management access granted']);
-    })->middleware('employee.permission:5,manage_payroll');
+    })->middleware('employee.permission:manage_payroll');
 
     // Employee management (admin)
-    Route::middleware('employee.permission:6,manage_employees')->group(function () {
+    Route::middleware('employee.permission:manage_employees')->group(function () {
         Route::get('/employees', [EmployeeController::class, 'index']);
         Route::post('/employees', [EmployeeController::class, 'store']);
         Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
@@ -43,11 +43,15 @@ Route::middleware('auth')->group(function () {
         Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
     });
 
-    // Performance reviews
-    Route::get('/performance-reviews', [PerformanceReviewController::class, 'index']);
-    Route::post('/performance-reviews', [PerformanceReviewController::class, 'store']);
-    Route::get('/performance-reviews/{performanceReview}', [PerformanceReviewController::class, 'show']);
-    Route::patch('/performance-reviews/{performanceReview}', [PerformanceReviewController::class, 'update']);
-    Route::post('/performance-reviews/{performanceReview}/submit', [PerformanceReviewController::class, 'submit']);
-    Route::post('/performance-reviews/{performanceReview}/complete', [PerformanceReviewController::class, 'complete']);
+    Route::middleware('employee.permission:access_employee_portal')->group(function () {
+        Route::get('/performance-reviews', [PerformanceReviewController::class, 'index']);
+        Route::post('/performance-reviews', [PerformanceReviewController::class, 'store']);
+        Route::get('/performance-reviews/{performanceReview}', [PerformanceReviewController::class, 'show']);
+        Route::post('/performance-reviews/{performanceReview}/submit', [PerformanceReviewController::class, 'submit']);
+    });
+
+    Route::middleware('employee.permission:manage_performance_reviews')->group(function () {
+        Route::patch('/performance-reviews/{performanceReview}', [PerformanceReviewController::class, 'update']);
+        Route::post('/performance-reviews/{performanceReview}/complete', [PerformanceReviewController::class, 'complete']);
+    });
 });

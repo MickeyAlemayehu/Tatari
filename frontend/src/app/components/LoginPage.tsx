@@ -53,8 +53,11 @@ export function LoginPage({
 
     setIsSubmitting(true);
     try {
-      await login(email.trim(), password, portal);
-      navigate(getDefaultDashboard(portal));
+      const session = await login(email.trim(), password);
+      if (session.portal !== portal) {
+        throw new ApiError("Your account does not have access to this portal.", 403);
+      }
+      navigate(getDefaultDashboard(session.employee));
     } catch (err) {
       setError(
         err instanceof ApiError

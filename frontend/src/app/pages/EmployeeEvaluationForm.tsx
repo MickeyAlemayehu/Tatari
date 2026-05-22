@@ -276,7 +276,12 @@ export function EmployeeEvaluationForm() {
     setIsSubmitting(true);
     setSubmitError(null);
     try {
-      await performanceService.submitEvaluation(Number(id), buildEvaluationPayload(answers));
+      const payload = buildEvaluationPayload(answers);
+      await performanceService.submitEvaluation(Number(id), {
+        answers: payload.answers,
+        ...(payload.score !== undefined ? { score: payload.score } : {}),
+        ...(payload.comments !== undefined ? { comments: payload.comments } : {}),
+      });
       setShowSuccess(true);
       setTimeout(() => navigate("/employee/performance?tab=tasks"), 1500);
     } catch (err) {

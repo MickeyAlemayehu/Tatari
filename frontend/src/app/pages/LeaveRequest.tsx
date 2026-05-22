@@ -100,7 +100,7 @@ export function LeaveRequest() {
     try {
       const selected = leaveTypes.find((t) => t.name === leaveType);
       await leaveService.create({
-        leave_type_id: selected?.id,
+        ...(selected ? { leave_type_id: selected.id } : {}),
         type: leaveType,
         start_date: startDate,
         end_date: endDate,

@@ -197,7 +197,7 @@ class PayrollController extends Controller
     {
         $employee = $request->user('api') ?? $request->user();
 
-        if ($payroll->employee_id !== $employee->id && ! $employee->hasPermission('manage_payroll', 5)) {
+        if ($payroll->employee_id !== $employee->id && ! $employee->hasPermission('manage_payroll')) {
             abort(Response::HTTP_FORBIDDEN, 'Not allowed to view this payslip.');
         }
 

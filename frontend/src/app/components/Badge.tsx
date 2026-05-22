@@ -3,6 +3,7 @@ interface BadgeProps {
   variant?: "success" | "warning" | "danger" | "info" | "default";
   size?: "sm" | "md";
   icon?: React.ReactNode;
+  color?: string;
 }
 
 export function Badge({
@@ -10,6 +11,7 @@ export function Badge({
   variant = "default",
   size = "md",
   icon,
+  color,
 }: BadgeProps) {
   const variants = {
     success: "bg-[#DCFCE7] text-[#22C55E] border-[#22C55E]/20",
@@ -26,7 +28,7 @@ export function Badge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md border ${variants[variant]} ${sizes[size]}`}
+      className={`inline-flex items-center gap-1 rounded-md border ${color ?? variants[variant]} ${sizes[size]}`}
     >
       {icon}
       {children}

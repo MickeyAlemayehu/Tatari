@@ -5,13 +5,13 @@ namespace Database\Seeders;
 use App\Models\Employee;
 use App\Models\Department;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class EmployeeSeeder extends Seeder
 {
     public function run(): void
     {
-        $password = Hash::make('Password123!');
+        // Plain password — Employee model "hashed" cast hashes once on save.
+        $plainPassword = 'Password123!';
         $hrDepartmentId = Department::where('name', 'Human Resources')->value('id');
 
         Employee::updateOrCreate(
@@ -21,13 +21,26 @@ class EmployeeSeeder extends Seeder
                 'last_name' => 'Admin',
                 'position' => 'HR Director',
                 'department_id' => $hrDepartmentId,
-                'password' => $password,
-                'permission_level' => 10,
-                'permission_override' => [
-                    'manage_payroll' => true,
-                    'manage_employees' => true,
-                    'approve_leave' => true,
-                ],
+                'password' => $plainPassword,
+                'permission_level' => 3,
+                'permission_override' => [],
+                'revoked_permissions' => [],
+                'must_change_password' => false,
+                'status' => 'active',
+            ]
+        );
+
+        // Common coursework / manual SQL alias (same admin, level 3)
+        Employee::updateOrCreate(
+            ['email' => 'admin@example.com'],
+            [
+                'first_name' => 'Admin',
+                'last_name' => 'User',
+                'position' => 'Administrator',
+                'department_id' => $hrDepartmentId,
+                'password' => $plainPassword,
+                'permission_level' => 3,
+                'permission_override' => [],
                 'revoked_permissions' => [],
                 'must_change_password' => false,
                 'status' => 'active',
@@ -41,12 +54,9 @@ class EmployeeSeeder extends Seeder
                 'last_name' => 'Manager',
                 'position' => 'HR Manager',
                 'department_id' => $hrDepartmentId,
-                'password' => $password,
-                'permission_level' => 6,
-                'permission_override' => [
-                    'manage_payroll' => true,
-                    'manage_employees' => true,
-                ],
+                'password' => $plainPassword,
+                'permission_level' => 2,
+                'permission_override' => [],
                 'revoked_permissions' => [],
                 'must_change_password' => false,
                 'status' => 'active',
@@ -58,10 +68,10 @@ class EmployeeSeeder extends Seeder
             [
                 'first_name' => 'Sarah',
                 'last_name' => 'Staff',
-                'position' => 'HR Assistant',
+                'position' => 'Staff Member',
                 'department_id' => $hrDepartmentId,
-                'password' => $password,
-                'permission_level' => 3,
+                'password' => $plainPassword,
+                'permission_level' => 1,
                 'permission_override' => [],
                 'revoked_permissions' => [],
                 'must_change_password' => false,
@@ -76,8 +86,8 @@ class EmployeeSeeder extends Seeder
                 'last_name' => 'Revoked',
                 'position' => 'Payroll Officer',
                 'department_id' => Department::where('name', 'Finance')->value('id') ?? $hrDepartmentId,
-                'password' => $password,
-                'permission_level' => 7,
+                'password' => $plainPassword,
+                'permission_level' => 2,
                 'permission_override' => [],
                 'revoked_permissions' => ['manage_payroll'],
                 'must_change_password' => false,
@@ -92,8 +102,8 @@ class EmployeeSeeder extends Seeder
                 'last_name' => 'Override',
                 'position' => 'HR Intern',
                 'department_id' => $hrDepartmentId,
-                'password' => $password,
-                'permission_level' => 2,
+                'password' => $plainPassword,
+                'permission_level' => 1,
                 'permission_override' => [
                     'manage_payroll' => true,
                 ],

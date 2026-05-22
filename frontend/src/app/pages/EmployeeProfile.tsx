@@ -19,11 +19,59 @@ import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 import { EmployeeCompensationSection } from "../components/EmployeeCompensationSection";
 
+interface EmployeeLeaveHistoryView {
+  id: number;
+  type: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  status: string;
+  approvedBy: string;
+}
+
+interface EmployeePerformanceView {
+  selfEvaluation: number;
+  peerEvaluation: number;
+  managerEvaluation: number;
+  finalScore: number;
+  lastReviewDate: string;
+}
+
+interface EmployeeEquipmentView {
+  id: number;
+  name: string;
+  category: string;
+  serialNumber: string;
+  assignedDate: string;
+}
+
+interface EmployeeProfileView {
+  id: number;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  dateOfBirth: string;
+  address: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  department: string;
+  role: string;
+  status: "active" | "inactive";
+  joinDate: string;
+  avatar: string;
+  employeeId: string;
+  reportingManager: string;
+  leaveHistory: EmployeeLeaveHistoryView[];
+  performance: EmployeePerformanceView;
+  equipment: EmployeeEquipmentView[];
+}
 
 export function EmployeeProfile() {
   const navigate = useNavigate();
   const { id } = useParams();
-  const [employee, setEmployee] = useState<Record<string, unknown> | null>(null);
+  const [employee, setEmployee] = useState<EmployeeProfileView | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,16 +83,16 @@ export function EmployeeProfile() {
       leaveService.list({ employee_id: Number(id), per_page: 20 }).catch(() => ({ data: [] })),
     ])
       .then(([emp, leaveRes]) => {
-        const leaveHistory = leaveRes.data.map((r) => ({
+        const leaveHistory: EmployeeLeaveHistoryView[] = leaveRes.data.map((r) => ({
             id: r.id,
-            type: r.leaveType ?? r.type,
+            type: r.leaveType ?? r.type ?? "Leave",
             startDate: r.startDate,
             endDate: r.endDate,
             days: r.days,
             status: r.status,
             approvedBy: "—",
           }));
-        const mgr = emp.manager as { first_name?: string; last_name?: string } | undefined;
+        const mgr = emp.manager ?? null;
         setEmployee({
           id: emp.id,
           firstName: emp.first_name,
@@ -59,7 +107,7 @@ export function EmployeeProfile() {
           department: emp.department?.name ?? "—",
           role: emp.position,
           status: emp.status === "inactive" ? "inactive" : "active",
-          joinDate: emp.created_at,
+          joinDate: emp.created_at ?? "",
           avatar: initials(emp.first_name, emp.last_name),
           employeeId: `EMP-${String(emp.id).padStart(3, "0")}`,
           reportingManager: mgr ? `${mgr.first_name} ${mgr.last_name}` : "—",
@@ -148,18 +196,18 @@ export function EmployeeProfile() {
                     </div>
                     <div className="flex items-center gap-2 text-sm text-[#6B7280]">
                       <Calendar className="w-4 h-4" />
-                      Joined {new Date(employee.joinDate).toLocaleDateString()}
+                      Joined {formatDate(employee.joinDate)}
                     </div>
                   </div>
                 </div>
               </div>
 
               <button
-                onClick={() => navigate(`/employees/${employee.id}/edit`)}
+                onClick={() => navigate("/employees")}
                 className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg"
               >
                 <Edit className="w-4 h-4" />
-                Edit Profile
+                Back to Employees
               </button>
             </div>
           </div>
@@ -230,7 +278,7 @@ export function EmployeeProfile() {
                 </button>
               </div>
               <div className="space-y-3">
-                {employee.leaveHistory.map((leave: any) => (
+                {employee.leaveHistory.map((leave) => (
                   <div
                     key={leave.id}
                     className="p-3 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]"
@@ -346,7 +394,7 @@ export function EmployeeProfile() {
                 <h3 className="text-[#111827]">Assigned Equipment</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {employee.equipment.map((item: any) => (
+                {employee.equipment.map((item) => (
                   <div
                     key={item.id}
                     className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]"

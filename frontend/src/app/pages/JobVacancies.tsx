@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Search, Filter, Eye, Edit, Trash2, MapPin, Briefcase, Clock, Users } from "lucide-react";
+import { Plus, Search, Filter, Eye, Trash2, MapPin, Briefcase, Clock, Users } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 import { jobsService, type JobRecord } from "../../services/jobs.service";
@@ -173,7 +173,9 @@ export function JobVacancies() {
                   </div>
                 </div>
                 <div className="text-2xl text-[#111827]">
-                  {Math.round(jobs.reduce((sum, job) => sum + job.applicants, 0) / jobs.length)}
+                  {jobs.length
+                    ? Math.round(jobs.reduce((sum, job) => sum + job.applicants, 0) / jobs.length)
+                    : 0}
                 </div>
                 <p className="text-xs text-[#6B7280] mt-1">Per job posting</p>
               </div>
@@ -327,13 +329,6 @@ export function JobVacancies() {
                                 title="View Details"
                               >
                                 <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => navigate(`/jobs/${job.id}/edit`)}
-                                className="p-2 text-[#6B7280] hover:bg-[#F9FAFB] rounded-lg transition"
-                                title="Edit"
-                              >
-                                <Edit className="w-4 h-4" />
                               </button>
                               <button
                                 className="p-2 text-[#6B7280] hover:bg-[#F9FAFB] rounded-lg transition"

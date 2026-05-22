@@ -96,16 +96,19 @@ export function CreateEmployee() {
     try {
       const { first_name, last_name } = splitFullName(fullName);
       const dept = departments.find((d) => String(d.id) === department || d.name === department);
-      await employeesService.create({
+      const payload: Parameters<typeof employeesService.create>[0] = {
         first_name,
         last_name,
         email: email.trim(),
         password: "Password123!",
         position: role.trim(),
-        department_id: dept?.id,
-        permission_level: 3,
+        permission_level: 1,
         status: status === "inactive" ? "inactive" : "active",
-      });
+      };
+      if (dept) {
+        payload.department_id = dept.id;
+      }
+      await employeesService.create(payload);
       setShowSuccess(true);
       setTimeout(() => navigate("/employees"), 2000);
     } catch (err) {

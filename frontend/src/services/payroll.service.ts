@@ -22,6 +22,8 @@ export interface PayrollRecord {
   employee_id?: number;
   employeeId?: string;
   employeeName?: string;
+  department?: string;
+  position?: string;
   year: number;
   month: number;
   status: string;
