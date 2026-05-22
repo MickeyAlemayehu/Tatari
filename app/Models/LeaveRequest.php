@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class LeaveRequest extends Model
@@ -14,6 +15,14 @@ class LeaveRequest extends Model
         'employee_id','leave_type_id','start_date','end_date',
         'is_half_day','reason','status','applied_at',
         'approved_by','approved_at','rejection_reason'
+    ];
+
+    protected $casts = [
+        'start_date' => 'date',
+        'end_date' => 'date',
+        'is_half_day' => 'boolean',
+        'applied_at' => 'datetime',
+        'approved_at' => 'datetime',
     ];
 
     public function employee() {

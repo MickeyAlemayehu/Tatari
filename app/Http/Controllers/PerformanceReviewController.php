@@ -14,11 +14,11 @@ class PerformanceReviewController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = $request->user('api') ?? $request->user();
+        $isManager = $user->hasPermission('manage_performance_reviews');
 
-        // Managers (permission_level >=4) can see their own plus team reviews; others see their own.
         $query = PerformanceReview::query()
             ->with(['employee', 'reviewer'])
-            ->when($user->permission_level < 4, function ($q) use ($user) {
+            ->when(! $isManager, function ($q) use ($user) {
                 $q->where('employee_id', $user->id);
             }, function ($q) use ($user) {
                 $q->where(function ($inner) use ($user) {
@@ -45,8 +45,7 @@ class PerformanceReviewController extends Controller
             'rating' => ['nullable', 'integer', 'between:1,5'],
         ]);
 
-        // Non-managers can only create for themselves.
-        if ($user->permission_level < 4 && (int) $data['employee_id'] !== $user->id) {
+        if (! $user->hasPermission('manage_performance_reviews') && (int) $data['employee_id'] !== $user->id) {
             abort(Response::HTTP_FORBIDDEN, 'Cannot create reviews for other employees.');
         }
 
@@ -99,9 +98,8 @@ class PerformanceReviewController extends Controller
 
     public function complete(Request $request, PerformanceReview $performanceReview): JsonResponse
     {
-        // Only reviewers or managers can complete.
         $user = $request->user('api') ?? $request->user();
-        if ($performanceReview->reviewer_id !== $user->id && $user->permission_level < 4) {
+        if ($performanceReview->reviewer_id !== $user->id && ! $user->hasPermission('manage_performance_reviews')) {
             abort(Response::HTTP_FORBIDDEN, 'Only reviewers or managers can complete reviews.');
         }
 
@@ -127,7 +125,7 @@ class PerformanceReviewController extends Controller
 
         $canView = $review->employee_id === $user->id
             || $review->reviewer_id === $user->id
-            || $user->permission_level >= 4;
+            || $user->hasPermission('manage_performance_reviews');
 
         if (! $canView) {
             abort(Response::HTTP_FORBIDDEN, 'Not allowed to view this review.');
@@ -136,7 +134,9 @@ class PerformanceReviewController extends Controller
 
     protected function authorizeEdit(Employee $user, PerformanceReview $review): void
     {
-        $canEdit = $review->reviewer_id === $user->id || $review->employee_id === $user->id || $user->permission_level >= 4;
+        $canEdit = $review->reviewer_id === $user->id
+            || $review->employee_id === $user->id
+            || $user->hasPermission('manage_performance_reviews');
 
         if (! $canEdit) {
             abort(Response::HTTP_FORBIDDEN, 'Not allowed to edit this review.');

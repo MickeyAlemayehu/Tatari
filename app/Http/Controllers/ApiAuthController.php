@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Employee;
+use App\Support\EmployeePermissions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
 
 class ApiAuthController extends Controller
 {
@@ -17,28 +19,45 @@ class ApiAuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        $employee = Employee::where('email', $credentials['email'])->first();
+        $email = strtolower(trim($credentials['email']));
+        $employee = Employee::query()->whereRaw('LOWER(email) = ?', [$email])->first();
 
-        if (! $employee || ! Hash::check($credentials['password'], $employee->password)) {
+        if (! $employee || ! Hash::check($credentials['password'], $employee->getAuthPassword())) {
             return response()->json([
                 'message' => 'Invalid credentials.',
-            ], 401);
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        if ($employee->status === 'inactive') {
+            return response()->json([
+                'message' => 'This account is inactive. Contact your administrator.',
+            ], Response::HTTP_FORBIDDEN);
+        }
+
+        if (! EmployeePermissions::resolvePortal($employee)) {
+            return response()->json([
+                'message' => 'This account has no portal access configured. Contact your administrator.',
+            ], Response::HTTP_FORBIDDEN);
         }
 
         $plainToken = Str::random(80);
         $employee->api_token = hash('sha256', $plainToken);
         $employee->save();
 
+        $employee->load('department:id,name');
+
         return response()->json([
             'token_type' => 'Bearer',
             'access_token' => $plainToken,
-            'employee' => [
+            'employee' => EmployeePermissions::toAuthArray($employee),
+            'user' => [
                 'id' => $employee->id,
+                'name' => trim("{$employee->first_name} {$employee->last_name}"),
                 'email' => $employee->email,
-                'first_name' => $employee->first_name,
-                'last_name' => $employee->last_name,
-                'permission_level' => $employee->permission_level,
             ],
+            'permission_level' => EmployeePermissions::normalizeLevel((int) $employee->permission_level),
+            'effective_permissions' => EmployeePermissions::effectivePermissions($employee),
+            'landing_path' => EmployeePermissions::landingPath($employee),
         ]);
     }
 
@@ -47,7 +66,7 @@ class ApiAuthController extends Controller
         $employee = $request->user('api');
 
         if (! $employee) {
-            return response()->json(['message' => 'Unauthenticated.'], 401);
+            return response()->json(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
         }
 
         $employee->api_token = null;
@@ -58,6 +77,9 @@ class ApiAuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        return response()->json($request->user('api'));
+        $employee = $request->user('api');
+        $employee->load('department:id,name');
+
+        return response()->json(EmployeePermissions::toAuthArray($employee));
     }
 }

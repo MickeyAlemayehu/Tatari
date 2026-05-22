@@ -9,7 +9,7 @@ class Payroll extends Model
 {
     use HasFactory;
 
-    protected $primaryKey = 'payroll_id';
+    public $timestamps = false;
 
     protected $fillable = [
         'employee_id', 'company_id', 'year', 'month',
@@ -17,6 +17,11 @@ class Payroll extends Model
         'deductions', 'unpaid_leave_days', 'unpaid_leave_amount',
         'gross_salary', 'net_salary', 'status', 'generated_at',
         'approved_by', 'approved_at', 'rejection_remarks'
+    ];
+
+    protected $casts = [
+        'generated_at' => 'datetime',
+        'approved_at' => 'datetime',
     ];
 
     public function employee() {
@@ -28,6 +33,6 @@ class Payroll extends Model
     }
 
     public function approver() {
-        return $this->belongsTo(User::class, 'approved_by');
+        return $this->belongsTo(Employee::class, 'approved_by');
     }
 }

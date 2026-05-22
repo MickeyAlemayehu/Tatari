@@ -13,9 +13,9 @@ class EmployeeController extends Controller
     public function index(Request $request): JsonResponse
     {
         $employees = Employee::query()
-            ->select(['id', 'first_name', 'last_name', 'email', 'position', 'permission_level', 'status'])
+            ->with('department:id,name')
             ->orderBy('last_name')
-            ->paginate(15);
+            ->paginate($request->integer('per_page', 50));
 
         return response()->json($employees);
     }
@@ -28,11 +28,14 @@ class EmployeeController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:employees,email'],
             'password' => ['required', 'string', 'min:8'],
             'position' => ['required', 'string', 'max:150'],
-            'permission_level' => ['required', 'integer', 'between:1,10'],
+            'permission_level' => ['sometimes', 'integer', 'between:1,3'],
             'permission_override' => ['sometimes', 'array'],
+            'custom_override' => ['sometimes', 'array'],
             'revoked_permissions' => ['sometimes', 'array'],
             'status' => ['sometimes', 'in:active,inactive'],
         ]);
+
+        $data['permission_level'] = $data['permission_level'] ?? config('permission_levels.default_level', 1);
 
         $employee = Employee::create($data);
 
@@ -41,7 +44,7 @@ class EmployeeController extends Controller
 
     public function show(Employee $employee): JsonResponse
     {
-        return response()->json($employee);
+        return response()->json($employee->load('department:id,name', 'manager:id,first_name,last_name'));
     }
 
     public function update(Request $request, Employee $employee): JsonResponse
@@ -52,8 +55,9 @@ class EmployeeController extends Controller
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('employees', 'email')->ignore($employee->id)],
             'password' => ['sometimes', 'string', 'min:8'],
             'position' => ['sometimes', 'string', 'max:150'],
-            'permission_level' => ['sometimes', 'integer', 'between:1,10'],
+            'permission_level' => ['sometimes', 'integer', 'between:1,3'],
             'permission_override' => ['sometimes', 'array'],
+            'custom_override' => ['sometimes', 'array'],
             'revoked_permissions' => ['sometimes', 'array'],
             'status' => ['sometimes', 'in:active,inactive'],
         ]);

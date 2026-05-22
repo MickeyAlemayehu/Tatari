@@ -15,7 +15,7 @@ return new class extends Migration {
             $table->string('position');
             $table->foreignId('department_id')->nullable()->constrained()->nullOnDelete();
             $table->foreignId('manager_id')->nullable()->constrained('employees')->nullOnDelete();
-            $table->integer('permission_level');
+            $table->tinyInteger('permission_level')->default(1);
             $table->json('permission_override')->nullable();
             $table->json('revoked_permissions')->nullable();
             $table->boolean('must_change_password')->default(false);

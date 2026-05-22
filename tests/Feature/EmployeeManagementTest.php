@@ -12,9 +12,8 @@ class EmployeeManagementTest extends TestCase
 
     public function test_admin_can_create_employee(): void
     {
-        $admin = Employee::factory()->manager()->create([
-            'permission_level' => 10,
-            'permission_override' => ['manage_employees' => true],
+        $admin = Employee::factory()->create([
+            'permission_level' => 3,
         ]);
 
         $payload = [
@@ -23,7 +22,7 @@ class EmployeeManagementTest extends TestCase
             'email' => 'jane@example.com',
             'password' => 'Password123!',
             'position' => 'HRBP',
-            'permission_level' => 4,
+            'permission_level' => 2,
         ];
 
         $response = $this->actingAs($admin, 'api')->postJson('/api/employees', $payload);
@@ -33,7 +32,7 @@ class EmployeeManagementTest extends TestCase
 
         $this->assertDatabaseHas('employees', [
             'email' => 'jane@example.com',
-            'permission_level' => 4,
+            'permission_level' => 2,
         ]);
     }
 
@@ -56,8 +55,8 @@ class EmployeeManagementTest extends TestCase
 
     public function test_admin_can_deactivate_employee(): void
     {
-        $admin = Employee::factory()->manager()->create([
-            'permission_override' => ['manage_employees' => true],
+        $admin = Employee::factory()->create([
+            'permission_level' => 3,
         ]);
         $target = Employee::factory()->staff()->create(['status' => 'active']);
 
