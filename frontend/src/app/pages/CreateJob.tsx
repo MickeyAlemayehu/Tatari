@@ -1,6 +1,17 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { ArrowLeft, Save,FileText, Plus, Trash2, AlertCircle, CheckCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  FileText,
+  Plus,
+  Trash2,
+  AlertCircle,
+  CheckCircle,
+  Copy,
+  ExternalLink,
+  Share2,
+} from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 import { jobsService } from "../../services/jobs.service";
 import { departmentsService, type DepartmentRecord } from "../../services/departments.service";
@@ -11,6 +22,9 @@ export function CreateJob() {
   const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
+  const [publishedJobId, setPublishedJobId] = useState<number | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   useEffect(() => {
     void departmentsService.list().then((res) => setDepartments(res.data)).catch(() => {});
@@ -98,12 +112,28 @@ export function CreateJob() {
     setIsSaving(true);
     setSaveError(null);
     try {
-      await jobsService.create(buildPayload(status));
-      navigate("/jobs");
+      const created = await jobsService.create(buildPayload(status));
+      if (status === "open") {
+        setPublishedJobId(created.id);
+        setPublishedUrl(`${window.location.origin}/careers/${created.id}`);
+      } else {
+        navigate("/jobs");
+      }
     } catch (e) {
       setSaveError(e instanceof ApiError ? e.message : "Failed to save job");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    if (!publishedUrl) return;
+    try {
+      await navigator.clipboard.writeText(publishedUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // ignore
     }
   };
 
@@ -456,20 +486,31 @@ export function CreateJob() {
                   <button
                     type="button"
                     onClick={handleSaveDraft}
-                    className="flex items-center gap-2 px-6 py-2.5 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition"
+                    disabled={isSaving}
+                    className="flex items-center gap-2 px-6 py-2.5 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <Save className="w-4 h-4" />
                     Save as Draft
                   </button>
                   <button
                     type="submit"
-                    className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
+                    disabled={isSaving}
+                    className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
-                    Publish Job Posting
+                    {isSaving ? "Saving…" : "Publish Job Posting"}
                   </button>
                 </div>
               </div>
+
+              {saveError && (
+                <div className="bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg p-4">
+                  <div className="flex gap-3">
+                    <AlertCircle className="w-5 h-5 text-[#EF4444] flex-shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700">{saveError}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Info Box */}
               <div className="bg-[#ECFEFF] border border-[#06B6D4]/20 rounded-lg p-4">
@@ -489,6 +530,84 @@ export function CreateJob() {
           </div>
         </main>
       </div>
+
+      {publishedUrl && publishedJobId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-w-lg w-full bg-white rounded-2xl shadow-2xl overflow-hidden">
+            <div className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] px-6 py-8 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <CheckCircle className="w-9 h-9 text-white" />
+              </div>
+              <h2 className="text-xl text-white mb-1">Job Posted Successfully</h2>
+              <p className="text-sm text-indigo-100">
+                Share this public link with applicants
+              </p>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block text-xs text-[#6B7280] mb-2">
+                  Public application URL
+                </label>
+                <div className="flex items-stretch gap-2">
+                  <input
+                    type="text"
+                    readOnly
+                    value={publishedUrl}
+                    onFocus={(e) => e.target.select()}
+                    className="flex-1 px-3 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition text-sm ${
+                      linkCopied
+                        ? "bg-[#DCFCE7] text-[#22C55E] border border-green-200"
+                        : "bg-[#EEF2FF] text-[#4F46E5] border border-[#4F46E5]/20 hover:bg-[#E0E7FF]"
+                    }`}
+                  >
+                    {linkCopied ? (
+                      <>
+                        <CheckCircle className="w-4 h-4" />
+                        <span>Copied</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>Copy</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-[#6B7280] flex items-center gap-1.5">
+                  <Share2 className="w-3 h-3" />
+                  Applicants can view the role and submit their application
+                  from this page.
+                </p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => navigate("/jobs")}
+                  className="flex-1 px-6 py-2.5 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition"
+                >
+                  Back to Jobs
+                </button>
+                <a
+                  href={publishedUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                  <span>View Posting</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 }
