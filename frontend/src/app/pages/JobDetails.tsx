@@ -18,6 +18,8 @@ import {
   Share2,
   Star,
   XCircle,
+  Copy,
+  ExternalLink,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
@@ -107,6 +109,20 @@ export function JobDetails() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [job, setJob] = useState<JobView | null>(null);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const publicUrl = job ? `${window.location.origin}/careers/${job.id}` : "";
+
+  const handleCopyLink = async () => {
+    if (!publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // ignore
+    }
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -257,6 +273,67 @@ export function JobDetails() {
           <div className="max-w-5xl mx-auto">
             {activeTab === "overview" ? (
               <div className="space-y-6">
+                {/* Public Application Link (open jobs only) */}
+                {job.status === "open" && (
+                  <div className="bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-[#4F46E5]/20 p-5">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Share2 className="w-4 h-4 text-[#4F46E5]" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="text-sm text-[#111827]">
+                          Public Application Link
+                        </h3>
+                        <p className="text-xs text-[#6B7280]">
+                          Share this URL with candidates so they can view the
+                          role and apply.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={publicUrl}
+                        onFocus={(e) => e.target.select()}
+                        className="flex-1 px-3 py-2.5 bg-white border border-[#E5E7EB] rounded-lg text-sm text-[#111827] focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                      />
+                      <div className="flex items-stretch gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCopyLink}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition text-sm border ${
+                            linkCopied
+                              ? "bg-[#DCFCE7] text-[#22C55E] border-green-200"
+                              : "bg-white text-[#4F46E5] border-[#4F46E5]/20 hover:bg-[#EEF2FF]"
+                          }`}
+                        >
+                          {linkCopied ? (
+                            <>
+                              <CheckCircle className="w-4 h-4" />
+                              <span>Copied</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-4 h-4" />
+                              <span>Copy</span>
+                            </>
+                          )}
+                        </button>
+                        <a
+                          href={publicUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white hover:from-[#4338CA] hover:to-[#4338CA] transition text-sm shadow"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          <span>Open</span>
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Quick Info Card */}
                 <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">

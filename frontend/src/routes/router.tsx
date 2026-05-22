@@ -38,6 +38,7 @@ import { JobDetails } from "../app/pages/JobDetails";
 import { ApplicantManagement } from "../app/pages/ApplicantManagement";
 import { ApplicantProfile } from "../app/pages/ApplicantProfile";
 import { PublicJobListing } from "../app/pages/PublicJobListing";
+import { PublicJobDetail } from "../app/pages/PublicJobDetail";
 import { PublicJobApplication } from "../app/pages/PublicJobApplication";
 import { PayrollDashboard } from "../app/pages/PayrollDashboard";
 import { PayrollGeneration } from "../app/pages/PayrollGeneration";
@@ -65,6 +66,7 @@ export const router = createBrowserRouter([
   { path: "/hr/login", element: <HRLogin /> },
   { path: "/admin/login", element: <AdminLogin /> },
   { path: "/careers", element: <PublicJobListing /> },
+  { path: "/careers/:id", element: <PublicJobDetail /> },
   { path: "/careers/:id/apply", element: <PublicJobApplication /> },
   { path: "/help", element: <Help /> },
 

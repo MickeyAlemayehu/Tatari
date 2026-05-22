@@ -9,7 +9,8 @@
     // See also https://aka.ms/tsconfig/module
     "module": "esnext",
     "target": "esnext",
-    "types": [],
+    "moduleResolution": "bundler",
+    "lib": ["esnext", "dom", "dom.iterable"],
     // For nodejs:
     // "lib": ["esnext"],
     // "types": ["node"],
