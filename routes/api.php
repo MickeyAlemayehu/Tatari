@@ -12,6 +12,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PerformanceEvaluationWorkflowController;
 use App\Http\Controllers\PerformanceReviewController;
+use App\Http\Controllers\EvaluationTemplateController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', function () {
@@ -45,6 +46,9 @@ Route::middleware('auth:api')->group(function () {
 
         Route::get('/evaluation-assignments/my', [PerformanceEvaluationWorkflowController::class, 'myAssignments']);
         Route::get('/performance-results/my', [PerformanceEvaluationWorkflowController::class, 'myResults']);
+
+        // Employee-facing: fetch questions for an assignment's template
+        Route::get('/evaluation-questions/for-assignment/{assignment}', [PerformanceEvaluationWorkflowController::class, 'questionsForAssignment']);
 
         Route::get('/payroll/my-payslips', [PayrollController::class, 'myPayslips']);
         Route::get('/payroll/payslips/{payroll}', [PayrollController::class, 'payslip']);
@@ -117,6 +121,23 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/evaluation-assignments', [PerformanceEvaluationWorkflowController::class, 'assignments']);
         Route::post('/evaluation-assignments/assign-peers', [PerformanceEvaluationWorkflowController::class, 'assignPeers']);
         Route::get('/performance-results', [PerformanceEvaluationWorkflowController::class, 'results']);
+
+        // Evaluation template CRUD
+        Route::get('/evaluation-templates', [EvaluationTemplateController::class, 'index']);
+        Route::post('/evaluation-templates', [EvaluationTemplateController::class, 'store']);
+        Route::get('/evaluation-templates/{template}', [EvaluationTemplateController::class, 'show']);
+        Route::patch('/evaluation-templates/{template}', [EvaluationTemplateController::class, 'update']);
+        Route::delete('/evaluation-templates/{template}', [EvaluationTemplateController::class, 'destroy']);
+        Route::post('/evaluation-templates/{template}/activate', [EvaluationTemplateController::class, 'activate']);
+        Route::post('/evaluation-templates/{template}/deactivate', [EvaluationTemplateController::class, 'deactivate']);
+
+        // Evaluation question CRUD
+        Route::get('/evaluation-questions', [EvaluationTemplateController::class, 'questions']);
+        Route::post('/evaluation-questions', [EvaluationTemplateController::class, 'storeQuestion']);
+        Route::get('/evaluation-questions/{question}', [EvaluationTemplateController::class, 'showQuestion']);
+        Route::patch('/evaluation-questions/{question}', [EvaluationTemplateController::class, 'updateQuestion']);
+        Route::delete('/evaluation-questions/{question}', [EvaluationTemplateController::class, 'destroyQuestion']);
+        Route::post('/evaluation-questions/reorder', [EvaluationTemplateController::class, 'reorderQuestions']);
     });
 
     Route::middleware('employee.permission:manage_payroll')->group(function () {

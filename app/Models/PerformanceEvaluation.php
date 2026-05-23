@@ -34,4 +34,8 @@ class PerformanceEvaluation extends Model
     public function period() {
         return $this->belongsTo(EvaluationPeriod::class, 'evaluation_period_id');
     }
+
+    public function answers() {
+        return $this->hasMany(EvaluationAnswer::class, 'evaluation_id');
+    }
 }

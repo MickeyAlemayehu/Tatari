@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ArrowLeft,
@@ -12,212 +12,321 @@ import {
   FileText,
   Star,
   MessageSquare,
+  Zap,
+  PowerOff,
+  ChevronRight,
+  Loader2,
+  LayoutTemplate,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import {
+  performanceService,
+  type EvaluationTemplateRecord,
+  type EvaluationQuestionRecord,
+  type QuestionOptionInput,
+} from "../../services/performance.service";
+import { ApiError } from "../../lib/api";
 
-interface Question {
-  id: number;
+type EvalType = "self" | "peer" | "manager";
+type QuestionType = "rating" | "text" | "textarea" | "multiple_choice" | "yes_no" | "numeric";
+
+const EVAL_TYPE_LABELS: Record<EvalType, string> = {
+  self: "Self",
+  peer: "Peer",
+  manager: "Manager",
+};
+
+const EVAL_TYPE_VARIANTS: Record<EvalType, "info" | "success" | "default"> = {
+  self: "info",
+  peer: "success",
+  manager: "default",
+};
+
+// ── Template form state ──────────────────────────────────────────────────────
+
+interface TemplateFormState {
+  title: string;
+  description: string;
+  weightSelf: number;
+  weightPeer: number;
+  weightManager: number;
+}
+
+const emptyTemplateForm = (): TemplateFormState => ({
+  title: "",
+  description: "",
+  weightSelf: 30,
+  weightPeer: 30,
+  weightManager: 40,
+});
+
+// ── Question form state ──────────────────────────────────────────────────────
+
+interface QuestionFormState {
   text: string;
-  type: "rating" | "text";
-  evaluationType: "self" | "peer" | "manager";
+  type: QuestionType;
+  evaluationType: EvalType;
   category: string;
   required: boolean;
+  weight: number;
 }
+
+const emptyQuestionForm = (): QuestionFormState => ({
+  text: "",
+  type: "rating",
+  evaluationType: "self",
+  category: "",
+  required: true,
+  weight: 1,
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function EvaluationBuilder() {
   const navigate = useNavigate();
-  const [showForm, setShowForm] = useState(false);
-  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
 
-  // Form state
-  const [questionText, setQuestionText] = useState("");
-  const [questionType, setQuestionType] = useState<"rating" | "text">("rating");
-  const [evaluationType, setEvaluationType] = useState<"self" | "peer" | "manager">("self");
-  const [category, setCategory] = useState("");
-  const [required, setRequired] = useState(true);
+  // ── Template list ──────────────────────────────────────────────────────────
+  const [templates, setTemplates]             = useState<EvaluationTemplateRecord[]>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(true);
+  const [selectedTemplate, setSelectedTemplate] = useState<EvaluationTemplateRecord | null>(null);
 
-  // Form errors
-  const [errors, setErrors] = useState({
-    questionText: "",
-    category: "",
-  });
+  // ── Questions for selected template ───────────────────────────────────────
+  const [questions, setQuestions]   = useState<EvaluationQuestionRecord[]>([]);
+  const [qLoading, setQLoading]     = useState(false);
+  const [filterType, setFilterType] = useState<"all" | EvalType>("all");
 
-  // Sample questions database
-  const [questions, setQuestions] = useState<Question[]>([
-    {
-      id: 1,
-      text: "How would you rate your overall performance this quarter?",
-      type: "rating",
-      evaluationType: "self",
-      category: "Overall Performance",
-      required: true,
-    },
-    {
-      id: 2,
-      text: "What were your major accomplishments this quarter?",
-      type: "text",
-      evaluationType: "self",
-      category: "Accomplishments",
-      required: true,
-    },
-    {
-      id: 3,
-      text: "Rate the employee's collaboration and teamwork skills",
-      type: "rating",
-      evaluationType: "peer",
-      category: "Collaboration",
-      required: true,
-    },
-    {
-      id: 4,
-      text: "Provide specific examples of how this employee contributes to team success",
-      type: "text",
-      evaluationType: "peer",
-      category: "Team Contribution",
-      required: true,
-    },
-    {
-      id: 5,
-      text: "Rate the employee's achievement of goals and objectives",
-      type: "rating",
-      evaluationType: "manager",
-      category: "Goals & Objectives",
-      required: true,
-    },
-    {
-      id: 6,
-      text: "Describe the employee's strengths and areas for development",
-      type: "text",
-      evaluationType: "manager",
-      category: "Development",
-      required: true,
-    },
-  ]);
+  // ── Template creation form ─────────────────────────────────────────────────
+  const [showTemplateForm, setShowTemplateForm]   = useState(false);
+  const [templateForm, setTemplateForm]           = useState<TemplateFormState>(emptyTemplateForm());
+  const [templateSaving, setTemplateSaving]       = useState(false);
+  const [templateFormError, setTemplateFormError] = useState("");
 
-  // Filter by evaluation type
-  const [filterType, setFilterType] = useState<"all" | "self" | "peer" | "manager">("all");
+  // ── Question form ──────────────────────────────────────────────────────────
+  const [showQuestionForm, setShowQuestionForm] = useState(false);
+  const [editingQuestion, setEditingQuestion]   = useState<EvaluationQuestionRecord | null>(null);
+  const [questionForm, setQuestionForm]         = useState<QuestionFormState>(emptyQuestionForm());
+  const [questionSaving, setQuestionSaving]     = useState(false);
+  const [questionFormErrors, setQuestionFormErrors] = useState({ text: "", category: "" });
 
-  const filteredQuestions = filterType === "all"
-    ? questions
-    : questions.filter(q => q.evaluationType === filterType);
+  // ── General feedback ──────────────────────────────────────────────────────
+  const [successMsg, setSuccessMsg] = useState("");
 
-  // Validate form
-  const validateForm = () => {
-    const newErrors = {
-      questionText: "",
-      category: "",
-    };
-    let isValid = true;
-
-    if (!questionText.trim()) {
-      newErrors.questionText = "Question text is required";
-      isValid = false;
-    } else if (questionText.trim().length < 10) {
-      newErrors.questionText = "Question must be at least 10 characters";
-      isValid = false;
-    }
-
-    if (!category.trim()) {
-      newErrors.category = "Category is required";
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    return isValid;
+  const flash = (msg: string) => {
+    setSuccessMsg(msg);
+    setTimeout(() => setSuccessMsg(""), 3000);
   };
 
-  // Handle form submit
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
+  // ── Load templates ─────────────────────────────────────────────────────────
+  const loadTemplates = () => {
+    setTemplatesLoading(true);
+    performanceService
+      .templates()
+      .then((res) => setTemplates(res.data))
+      .catch(() => {})
+      .finally(() => setTemplatesLoading(false));
+  };
 
-    if (editingQuestion) {
-      // Update existing question
-      setQuestions(prev =>
-        prev.map(q =>
-          q.id === editingQuestion.id
-            ? {
-                ...q,
-                text: questionText,
-                type: questionType,
-                evaluationType: evaluationType,
-                category: category,
-                required: required,
-              }
-            : q
+  useEffect(() => { loadTemplates(); }, []);
+
+  // ── Load questions when template is selected ───────────────────────────────
+  const loadQuestions = (templateId: number) => {
+    setQLoading(true);
+    performanceService
+      .questions({ template_id: templateId })
+      .then((res) => setQuestions(res.data))
+      .catch(() => {})
+      .finally(() => setQLoading(false));
+  };
+
+  const selectTemplate = (t: EvaluationTemplateRecord) => {
+    setSelectedTemplate(t);
+    setFilterType("all");
+    loadQuestions(t.id);
+  };
+
+  // ── Template CRUD ──────────────────────────────────────────────────────────
+  const handleCreateTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateForm.title.trim()) {
+      setTemplateFormError("Template title is required");
+      return;
+    }
+    const total = templateForm.weightSelf + templateForm.weightPeer + templateForm.weightManager;
+    if (total !== 100) {
+      setTemplateFormError(`Weights must sum to 100% (currently ${total}%)`);
+      return;
+    }
+    setTemplateSaving(true);
+    setTemplateFormError("");
+    try {
+      const t = await performanceService.createTemplate({
+        title: templateForm.title.trim(),
+        description: templateForm.description.trim() || undefined,
+        weights: {
+          self: templateForm.weightSelf,
+          peer: templateForm.weightPeer,
+          manager: templateForm.weightManager,
+        },
+      });
+      setTemplates((prev) => [t, ...prev]);
+      setTemplateForm(emptyTemplateForm());
+      setShowTemplateForm(false);
+      flash(`Template "${t.title}" created.`);
+      selectTemplate(t);
+    } catch (err) {
+      setTemplateFormError(err instanceof ApiError ? err.message : "Failed to create template.");
+    } finally {
+      setTemplateSaving(false);
+    }
+  };
+
+  const handleDeleteTemplate = async (t: EvaluationTemplateRecord) => {
+    if (!confirm(`Delete template "${t.title}"? This cannot be undone.`)) return;
+    try {
+      await performanceService.deleteTemplate(t.id);
+      setTemplates((prev) => prev.filter((x) => x.id !== t.id));
+      if (selectedTemplate?.id === t.id) {
+        setSelectedTemplate(null);
+        setQuestions([]);
+      }
+      flash("Template deleted.");
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to delete template.");
+    }
+  };
+
+  const handleToggleActive = async (t: EvaluationTemplateRecord) => {
+    try {
+      const updated =
+        t.status === "active"
+          ? await performanceService.deactivateTemplate(t.id)
+          : await performanceService.activateTemplate(t.id);
+      setTemplates((prev) => prev.map((x) => (x.id === t.id ? { ...x, status: updated.status } : x)));
+      if (selectedTemplate?.id === t.id)
+        setSelectedTemplate((prev) => prev ? { ...prev, status: updated.status } : prev);
+      flash(`Template ${updated.status === "active" ? "activated" : "deactivated"}.`);
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to update template status.");
+    }
+  };
+
+  // ── Question CRUD ──────────────────────────────────────────────────────────
+  const validateQuestionForm = () => {
+    const errs = { text: "", category: "" };
+    let ok = true;
+    if (!questionForm.text.trim()) {
+      errs.text = "Question text is required";
+      ok = false;
+    } else if (questionForm.text.trim().length < 10) {
+      errs.text = "Question must be at least 10 characters";
+      ok = false;
+    }
+    if (!questionForm.category.trim()) {
+      errs.category = "Category is required";
+      ok = false;
+    }
+    setQuestionFormErrors(errs);
+    return ok;
+  };
+
+  const handleQuestionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!validateQuestionForm() || !selectedTemplate) return;
+
+    setQuestionSaving(true);
+    try {
+      if (editingQuestion) {
+        const updated = await performanceService.updateQuestion(editingQuestion.id, {
+          text: questionForm.text.trim(),
+          type: questionForm.type,
+          evaluationType: questionForm.evaluationType,
+          category: questionForm.category.trim(),
+          required: questionForm.required,
+          weight: questionForm.weight,
+        });
+        setQuestions((prev) => prev.map((q) => (q.id === editingQuestion.id ? updated : q)));
+        flash("Question updated.");
+      } else {
+        const created = await performanceService.createQuestion({
+          template_id: selectedTemplate.id,
+          text: questionForm.text.trim(),
+          type: questionForm.type,
+          evaluationType: questionForm.evaluationType,
+          category: questionForm.category.trim(),
+          required: questionForm.required,
+          weight: questionForm.weight,
+        });
+        setQuestions((prev) => [...prev, created]);
+        // Update questionCount on template
+        setTemplates((prev) =>
+          prev.map((t) =>
+            t.id === selectedTemplate.id
+              ? { ...t, questionCount: (t.questionCount ?? 0) + 1 }
+              : t
+          )
+        );
+        flash("Question added.");
+      }
+      resetQuestionForm();
+    } catch (err) {
+      setQuestionFormErrors((prev) => ({
+        ...prev,
+        text: err instanceof ApiError ? err.message : "Failed to save question.",
+      }));
+    } finally {
+      setQuestionSaving(false);
+    }
+  };
+
+  const handleEditQuestion = (q: EvaluationQuestionRecord) => {
+    setEditingQuestion(q);
+    setQuestionForm({
+      text: q.text,
+      type: q.type as QuestionType,
+      evaluationType: (q.evaluationType ?? q.evaluation_type ?? "self") as EvalType,
+      category: q.category,
+      required: q.required,
+      weight: q.weight ?? 1,
+    });
+    setShowQuestionForm(true);
+  };
+
+  const handleDeleteQuestion = async (q: EvaluationQuestionRecord) => {
+    if (!confirm("Delete this question?")) return;
+    try {
+      await performanceService.deleteQuestion(q.id);
+      setQuestions((prev) => prev.filter((x) => x.id !== q.id));
+      setTemplates((prev) =>
+        prev.map((t) =>
+          t.id === selectedTemplate?.id
+            ? { ...t, questionCount: Math.max(0, (t.questionCount ?? 1) - 1) }
+            : t
         )
       );
-    } else {
-      // Add new question
-      const newQuestion: Question = {
-        id: Math.max(...questions.map(q => q.id), 0) + 1,
-        text: questionText,
-        type: questionType,
-        evaluationType: evaluationType,
-        category: category,
-        required: required,
-      };
-      setQuestions(prev => [...prev, newQuestion]);
+      flash("Question deleted.");
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to delete question.");
     }
+  };
 
-    // Reset form
-    setQuestionText("");
-    setQuestionType("rating");
-    setEvaluationType("self");
-    setCategory("");
-    setRequired(true);
+  const resetQuestionForm = () => {
     setEditingQuestion(null);
-    setShowForm(false);
-    setShowSuccess(true);
-
-    setTimeout(() => setShowSuccess(false), 3000);
+    setQuestionForm(emptyQuestionForm());
+    setQuestionFormErrors({ text: "", category: "" });
+    setShowQuestionForm(false);
   };
 
-  // Handle edit
-  const handleEdit = (question: Question) => {
-    setEditingQuestion(question);
-    setQuestionText(question.text);
-    setQuestionType(question.type);
-    setEvaluationType(question.evaluationType);
-    setCategory(question.category);
-    setRequired(question.required);
-    setShowForm(true);
-  };
+  const filteredQuestions =
+    filterType === "all"
+      ? questions
+      : questions.filter(
+          (q) => (q.evaluationType ?? q.evaluation_type) === filterType
+        );
 
-  // Handle delete
-  const handleDelete = (questionId: number) => {
-    if (confirm("Are you sure you want to delete this question?")) {
-      setQuestions(prev => prev.filter(q => q.id !== questionId));
-    }
-  };
-
-  // Cancel form
-  const handleCancel = () => {
-    setQuestionText("");
-    setQuestionType("rating");
-    setEvaluationType("self");
-    setCategory("");
-    setRequired(true);
-    setEditingQuestion(null);
-    setShowForm(false);
-    setErrors({ questionText: "", category: "" });
-  };
-
-  const getEvaluationTypeBadge = (type: string) => {
-    switch (type) {
-      case "self":
-        return <Badge variant="info" size="sm">Self</Badge>;
-      case "peer":
-        return <Badge variant="success" size="sm">Peer</Badge>;
-      case "manager":
-        return <Badge variant="default" size="sm">Manager</Badge>;
-      default:
-        return null;
-    }
-  };
-
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <AppLayout>
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -233,291 +342,489 @@ export function EvaluationBuilder() {
               </button>
               <div>
                 <h1 className="text-xl text-[#111827]">Evaluation Builder</h1>
-                <p className="text-sm text-[#6B7280]">Create and manage evaluation questions</p>
+                <p className="text-sm text-[#6B7280]">
+                  {selectedTemplate
+                    ? `Editing: ${selectedTemplate.title}`
+                    : "Create templates and manage evaluation questions"}
+                </p>
               </div>
             </div>
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
-            >
-              <Plus className="w-5 h-5" />
-              <span>Add Question</span>
-            </button>
+            <div className="flex items-center gap-2">
+              {selectedTemplate && (
+                <button
+                  onClick={() => { setSelectedTemplate(null); setQuestions([]); }}
+                  className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm"
+                >
+                  <LayoutTemplate className="w-4 h-4" />
+                  All Templates
+                </button>
+              )}
+              {!selectedTemplate && (
+                <button
+                  onClick={() => { setShowTemplateForm(true); setTemplateFormError(""); }}
+                  className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl text-sm"
+                >
+                  <Plus className="w-5 h-5" />
+                  New Template
+                </button>
+              )}
+              {selectedTemplate && (
+                <button
+                  onClick={() => { resetQuestionForm(); setShowQuestionForm(true); }}
+                  className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl text-sm"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add Question
+                </button>
+              )}
+            </div>
           </div>
         </header>
 
-        {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-6xl mx-auto">
-            {/* Success Message */}
-            {showSuccess && (
-              <div className="mb-6 p-4 bg-[#DCFCE7] border border-green-200 rounded-lg flex items-start gap-3">
-                <CheckCircle className="w-5 h-5 text-[#22C55E] mt-0.5 flex-shrink-0" />
-                <div>
-                  <h3 className="text-sm text-[#22C55E] mb-1">Success!</h3>
-                  <p className="text-sm text-[#22C55E]">
-                    Question {editingQuestion ? "updated" : "created"} successfully.
-                  </p>
-                </div>
+          <div className="max-w-5xl mx-auto">
+            {/* Flash success */}
+            {successMsg && (
+              <div className="mb-6 p-4 bg-[#DCFCE7] border border-green-200 rounded-lg flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-[#22C55E] flex-shrink-0" />
+                <p className="text-sm text-[#22C55E]">{successMsg}</p>
               </div>
             )}
 
-            {/* Question Form */}
-            {showForm && (
-              <div className="mb-6 bg-white rounded-xl border border-[#E5E7EB] p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-sm text-[#111827]">
-                    {editingQuestion ? "Edit Question" : "Create New Question"}
-                  </h2>
-                  <button
-                    onClick={handleCancel}
-                    className="p-2 text-[#6B7280] hover:bg-[#F9FAFB] rounded-lg transition"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  {/* Question Text */}
-                  <div>
-                    <label className="block text-sm text-[#111827] mb-2">
-                      Question Text <span className="text-red-500">*</span>
-                    </label>
-                    <textarea
-                      value={questionText}
-                      onChange={(e) => {
-                        setQuestionText(e.target.value);
-                        if (errors.questionText) setErrors({ ...errors, questionText: "" });
-                      }}
-                      placeholder="Enter your evaluation question..."
-                      rows={3}
-                      className={`w-full px-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition resize-none ${
-                        errors.questionText
-                          ? "border-[#EF4444]/30 focus:ring-[#EF4444]"
-                          : "border-[#E5E7EB] focus:ring-[#4F46E5] focus:border-transparent"
-                      }`}
-                    />
-                    {errors.questionText && (
-                      <div className="mt-2 flex items-center gap-1 text-[#EF4444]">
-                        <AlertCircle className="w-4 h-4" />
-                        <p className="text-sm">{errors.questionText}</p>
+            {/* ── Template List ──────────────────────────────────────────── */}
+            {!selectedTemplate && (
+              <>
+                {/* Create template form */}
+                {showTemplateForm && (
+                  <div className="mb-6 bg-white rounded-xl border border-[#E5E7EB] p-6">
+                    <div className="flex items-center justify-between mb-5">
+                      <h2 className="text-sm text-[#111827]">New Template</h2>
+                      <button onClick={() => setShowTemplateForm(false)} className="p-1 text-[#6B7280] hover:bg-[#F9FAFB] rounded">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    {templateFormError && (
+                      <div className="mb-4 p-3 bg-[#FEF2F2] border border-red-200 rounded-lg flex items-center gap-2 text-sm text-[#EF4444]">
+                        <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                        {templateFormError}
                       </div>
                     )}
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Question Type */}
-                    <div>
-                      <label className="block text-sm text-[#111827] mb-2">
-                        Question Type <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={questionType}
-                        onChange={(e) => setQuestionType(e.target.value as "rating" | "text")}
-                        className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition"
-                      >
-                        <option value="rating">Rating Scale (1-5)</option>
-                        <option value="text">Text Feedback</option>
-                      </select>
-                    </div>
-
-                    {/* Evaluation Type */}
-                    <div>
-                      <label className="block text-sm text-[#111827] mb-2">
-                        Evaluation Type <span className="text-red-500">*</span>
-                      </label>
-                      <select
-                        value={evaluationType}
-                        onChange={(e) => setEvaluationType(e.target.value as "self" | "peer" | "manager")}
-                        className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition"
-                      >
-                        <option value="self">Self Evaluation</option>
-                        <option value="peer">Peer Evaluation</option>
-                        <option value="manager">Manager Evaluation</option>
-                      </select>
-                    </div>
-
-                    {/* Category */}
-                    <div>
-                      <label className="block text-sm text-[#111827] mb-2">
-                        Category <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={category}
-                        onChange={(e) => {
-                          setCategory(e.target.value);
-                          if (errors.category) setErrors({ ...errors, category: "" });
-                        }}
-                        placeholder="e.g., Goals & Objectives"
-                        className={`w-full px-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition ${
-                          errors.category
-                            ? "border-[#EF4444]/30 focus:ring-[#EF4444]"
-                            : "border-[#E5E7EB] focus:ring-[#4F46E5] focus:border-transparent"
-                        }`}
-                      />
-                      {errors.category && (
-                        <div className="mt-2 flex items-center gap-1 text-[#EF4444]">
-                          <AlertCircle className="w-4 h-4" />
-                          <p className="text-sm">{errors.category}</p>
+                    <form onSubmit={handleCreateTemplate} className="space-y-4">
+                      <div>
+                        <label className="block text-sm text-[#111827] mb-1">
+                          Title <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={templateForm.title}
+                          onChange={(e) => setTemplateForm({ ...templateForm, title: e.target.value })}
+                          placeholder="e.g., Q1 2026 Standard Evaluation"
+                          className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-[#111827] mb-1">Description</label>
+                        <textarea
+                          value={templateForm.description}
+                          onChange={(e) => setTemplateForm({ ...templateForm, description: e.target.value })}
+                          placeholder="Optional description…"
+                          rows={2}
+                          className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-[#111827] mb-2">Score Weights (must total 100%)</label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {(["self", "peer", "manager"] as const).map((role) => {
+                            const key = `weight${role.charAt(0).toUpperCase() + role.slice(1)}` as keyof TemplateFormState;
+                            return (
+                              <div key={role}>
+                                <label className="block text-xs text-[#6B7280] capitalize mb-1">{role}</label>
+                                <div className="relative">
+                                  <input
+                                    type="number"
+                                    min={0} max={100}
+                                    value={templateForm[key] as number}
+                                    onChange={(e) =>
+                                      setTemplateForm({ ...templateForm, [key]: Number(e.target.value) })
+                                    }
+                                    className="w-full px-3 py-2 pr-7 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition text-right"
+                                  />
+                                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[#6B7280]">%</span>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                      )}
-                    </div>
+                        <p className={`text-xs mt-2 ${
+                          templateForm.weightSelf + templateForm.weightPeer + templateForm.weightManager === 100
+                            ? "text-[#22C55E]"
+                            : "text-[#F59E0B]"
+                        }`}>
+                          Total: {templateForm.weightSelf + templateForm.weightPeer + templateForm.weightManager}%
+                        </p>
+                      </div>
+                      <div className="flex justify-end gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => setShowTemplateForm(false)}
+                          className="px-5 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={templateSaving}
+                          className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-5 py-2 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow disabled:opacity-50 text-sm"
+                        >
+                          {templateSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          Create Template
+                        </button>
+                      </div>
+                    </form>
                   </div>
+                )}
 
-                  {/* Required Checkbox */}
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      id="required"
-                      checked={required}
-                      onChange={(e) => setRequired(e.target.checked)}
-                      className="w-4 h-4 text-[#4F46E5] border-gray-300 rounded focus:ring-[#4F46E5]"
-                    />
-                    <label htmlFor="required" className="text-sm text-[#6B7280]">
-                      This question is required
-                    </label>
+                {/* Template cards */}
+                {templatesLoading ? (
+                  <div className="flex justify-center py-16">
+                    <Loader2 className="w-8 h-8 text-[#4F46E5] animate-spin" />
                   </div>
-
-                  {/* Form Actions */}
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#E5E7EB]">
+                ) : templates.length === 0 ? (
+                  <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
+                    <LayoutTemplate className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-sm text-[#6B7280] mb-4">No templates yet. Create your first one to get started.</p>
                     <button
-                      type="button"
-                      onClick={handleCancel}
-                      className="px-6 py-2.5 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition"
+                      onClick={() => setShowTemplateForm(true)}
+                      className="inline-flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-5 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow text-sm"
                     >
-                      Cancel
+                      <Plus className="w-4 h-4" />
+                      New Template
                     </button>
-                    <button
-                      type="submit"
-                      className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
-                    >
-                      <Save className="w-5 h-5" />
-                      <span>{editingQuestion ? "Update" : "Create"} Question</span>
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-
-            {/* Filter */}
-            <div className="mb-6 bg-white rounded-xl border border-[#E5E7EB] p-4">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-[#6B7280]">Filter by:</span>
-                <button
-                  onClick={() => setFilterType("all")}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                    filterType === "all"
-                      ? "bg-[#4F46E5] text-white"
-                      : "bg-[#F9FAFB] text-[#6B7280] hover:bg-[#E5E7EB]"
-                  }`}
-                >
-                  All ({questions.length})
-                </button>
-                <button
-                  onClick={() => setFilterType("self")}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                    filterType === "self"
-                      ? "bg-[#4F46E5] text-white"
-                      : "bg-[#F9FAFB] text-[#6B7280] hover:bg-[#E5E7EB]"
-                  }`}
-                >
-                  Self ({questions.filter(q => q.evaluationType === "self").length})
-                </button>
-                <button
-                  onClick={() => setFilterType("peer")}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                    filterType === "peer"
-                      ? "bg-[#4F46E5] text-white"
-                      : "bg-[#F9FAFB] text-[#6B7280] hover:bg-[#E5E7EB]"
-                  }`}
-                >
-                  Peer ({questions.filter(q => q.evaluationType === "peer").length})
-                </button>
-                <button
-                  onClick={() => setFilterType("manager")}
-                  className={`px-3 py-1.5 rounded-lg text-sm transition ${
-                    filterType === "manager"
-                      ? "bg-[#4F46E5] text-white"
-                      : "bg-[#F9FAFB] text-[#6B7280] hover:bg-[#E5E7EB]"
-                  }`}
-                >
-                  Manager ({questions.filter(q => q.evaluationType === "manager").length})
-                </button>
-              </div>
-            </div>
-
-            {/* Questions List */}
-            <div className="bg-white rounded-xl border border-[#E5E7EB]">
-              <div className="px-6 py-4 border-b border-[#E5E7EB]">
-                <h2 className="text-sm text-[#111827]">
-                  Questions ({filteredQuestions.length})
-                </h2>
-              </div>
-              <div className="divide-y divide-[#E5E7EB]">
-                {filteredQuestions.length === 0 ? (
-                  <div className="px-6 py-12 text-center text-[#6B7280]">
-                    <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                    <p className="text-sm">No questions found for this filter.</p>
                   </div>
                 ) : (
-                  filteredQuestions.map((question) => (
-                    <div key={question.id} className="px-6 py-5 hover:bg-[#F9FAFB] transition">
-                      <div className="flex items-start gap-4">
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                          question.type === "rating"
-                            ? "bg-[#FFFBEB] text-[#F59E0B]"
-                            : "bg-[#ECFEFF] text-[#06B6D4]"
-                        }`}>
-                          {question.type === "rating" ? (
-                            <Star className="w-5 h-5" />
-                          ) : (
-                            <MessageSquare className="w-5 h-5" />
-                          )}
-                        </div>
-
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-start gap-2 mb-2">
-                            <p className="text-sm text-[#111827] flex-1">{question.text}</p>
+                  <div className="space-y-4">
+                    {templates.map((t) => (
+                      <div
+                        key={t.id}
+                        className="bg-white rounded-xl border border-[#E5E7EB] p-5 hover:border-[#4F46E5]/30 hover:shadow-sm transition"
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="w-10 h-10 bg-[#EEF2FF] rounded-lg flex items-center justify-center flex-shrink-0">
+                            <FileText className="w-5 h-5 text-[#4F46E5]" />
                           </div>
-                          <div className="flex items-center gap-2 flex-wrap">
-                            {getEvaluationTypeBadge(question.evaluationType)}
-                            <span className="text-xs text-[#6B7280]">
-                              {question.type === "rating" ? "Rating Scale" : "Text Feedback"}
-                            </span>
-                            <span className="text-xs text-[#6B7280]">•</span>
-                            <span className="text-xs text-[#6B7280]">{question.category}</span>
-                            {question.required && (
-                              <>
-                                <span className="text-xs text-[#6B7280]">•</span>
-                                <span className="text-xs text-[#EF4444]">Required</span>
-                              </>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <h3 className="text-sm text-[#111827]">{t.title}</h3>
+                              <Badge
+                                variant={t.status === "active" ? "success" : "default"}
+                                size="sm"
+                              >
+                                {t.status}
+                              </Badge>
+                            </div>
+                            {t.description && (
+                              <p className="text-xs text-[#6B7280] mb-2">{t.description}</p>
                             )}
+                            <div className="flex items-center gap-3 text-xs text-[#6B7280]">
+                              <span>{t.questionCount ?? 0} questions</span>
+                              {t.weights && (
+                                <span>
+                                  Self {t.weights.self}% · Peer {t.weights.peer}% · Manager {t.weights.manager}%
+                                </span>
+                              )}
+                            </div>
                           </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEdit(question)}
-                            className="p-2 text-[#4F46E5] hover:bg-[#EEF2FF] rounded-lg transition"
-                            title="Edit Question"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(question.id)}
-                            className="p-2 text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
-                            title="Delete Question"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <button
+                              onClick={() => handleToggleActive(t)}
+                              title={t.status === "active" ? "Deactivate" : "Activate"}
+                              className={`p-2 rounded-lg transition ${
+                                t.status === "active"
+                                  ? "text-[#F59E0B] hover:bg-[#FFFBEB]"
+                                  : "text-[#22C55E] hover:bg-[#DCFCE7]"
+                              }`}
+                            >
+                              {t.status === "active" ? <PowerOff className="w-4 h-4" /> : <Zap className="w-4 h-4" />}
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTemplate(t)}
+                              title="Delete template"
+                              className="p-2 text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => selectTemplate(t)}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-[#EEF2FF] text-[#4F46E5] rounded-lg hover:bg-[#4F46E5] hover:text-white transition text-sm"
+                            >
+                              Edit Questions
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))
+                    ))}
+                  </div>
                 )}
-              </div>
-            </div>
+              </>
+            )}
+
+            {/* ── Question Editor (inside a template) ───────────────────── */}
+            {selectedTemplate && (
+              <>
+                {/* Question form */}
+                {showQuestionForm && (
+                  <div className="mb-6 bg-white rounded-xl border border-[#E5E7EB] p-6">
+                    <div className="flex items-center justify-between mb-5">
+                      <h2 className="text-sm text-[#111827]">
+                        {editingQuestion ? "Edit Question" : "Add Question"}
+                      </h2>
+                      <button onClick={resetQuestionForm} className="p-1 text-[#6B7280] hover:bg-[#F9FAFB] rounded">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <form onSubmit={handleQuestionSubmit} className="space-y-4">
+                      {/* Text */}
+                      <div>
+                        <label className="block text-sm text-[#111827] mb-1">
+                          Question Text <span className="text-red-500">*</span>
+                        </label>
+                        <textarea
+                          value={questionForm.text}
+                          onChange={(e) => {
+                            setQuestionForm({ ...questionForm, text: e.target.value });
+                            if (questionFormErrors.text) setQuestionFormErrors({ ...questionFormErrors, text: "" });
+                          }}
+                          placeholder="Enter your evaluation question..."
+                          rows={3}
+                          className={`w-full px-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition resize-none ${
+                            questionFormErrors.text
+                              ? "border-[#EF4444]/30 focus:ring-[#EF4444]"
+                              : "border-[#E5E7EB] focus:ring-[#4F46E5] focus:border-transparent"
+                          }`}
+                        />
+                        {questionFormErrors.text && (
+                          <div className="mt-1 flex items-center gap-1 text-[#EF4444]">
+                            <AlertCircle className="w-4 h-4" />
+                            <p className="text-sm">{questionFormErrors.text}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {/* Question type */}
+                        <div>
+                          <label className="block text-sm text-[#111827] mb-1">Type</label>
+                          <select
+                            value={questionForm.type}
+                            onChange={(e) => setQuestionForm({ ...questionForm, type: e.target.value as QuestionType })}
+                            className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
+                          >
+                            <option value="rating">Rating (1–5)</option>
+                            <option value="text">Short Text</option>
+                            <option value="textarea">Long Text</option>
+                            <option value="yes_no">Yes / No</option>
+                            <option value="numeric">Numeric</option>
+                          </select>
+                        </div>
+
+                        {/* Evaluation type */}
+                        <div>
+                          <label className="block text-sm text-[#111827] mb-1">Evaluator</label>
+                          <select
+                            value={questionForm.evaluationType}
+                            onChange={(e) => setQuestionForm({ ...questionForm, evaluationType: e.target.value as EvalType })}
+                            className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
+                          >
+                            <option value="self">Self Evaluation</option>
+                            <option value="peer">Peer Evaluation</option>
+                            <option value="manager">Manager Evaluation</option>
+                          </select>
+                        </div>
+
+                        {/* Category */}
+                        <div>
+                          <label className="block text-sm text-[#111827] mb-1">
+                            Category <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={questionForm.category}
+                            onChange={(e) => {
+                              setQuestionForm({ ...questionForm, category: e.target.value });
+                              if (questionFormErrors.category) setQuestionFormErrors({ ...questionFormErrors, category: "" });
+                            }}
+                            placeholder="e.g., Goals & Objectives"
+                            className={`w-full px-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition ${
+                              questionFormErrors.category
+                                ? "border-[#EF4444]/30 focus:ring-[#EF4444]"
+                                : "border-[#E5E7EB] focus:ring-[#4F46E5] focus:border-transparent"
+                            }`}
+                          />
+                          {questionFormErrors.category && (
+                            <div className="mt-1 flex items-center gap-1 text-[#EF4444]">
+                              <AlertCircle className="w-4 h-4" />
+                              <p className="text-sm">{questionFormErrors.category}</p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="required"
+                          checked={questionForm.required}
+                          onChange={(e) => setQuestionForm({ ...questionForm, required: e.target.checked })}
+                          className="w-4 h-4 text-[#4F46E5] rounded"
+                        />
+                        <label htmlFor="required" className="text-sm text-[#6B7280]">
+                          This question is required
+                        </label>
+                      </div>
+
+                      <div className="flex justify-end gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={resetQuestionForm}
+                          className="px-5 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="submit"
+                          disabled={questionSaving}
+                          className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-5 py-2 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow disabled:opacity-50 text-sm"
+                        >
+                          {questionSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                          {editingQuestion ? "Update" : "Add"} Question
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {/* Filter bar */}
+                <div className="mb-4 bg-white rounded-xl border border-[#E5E7EB] p-4">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-sm text-[#6B7280]">Filter:</span>
+                    {(["all", "self", "peer", "manager"] as const).map((ft) => {
+                      const count =
+                        ft === "all"
+                          ? questions.length
+                          : questions.filter((q) => (q.evaluationType ?? q.evaluation_type) === ft).length;
+                      return (
+                        <button
+                          key={ft}
+                          onClick={() => setFilterType(ft)}
+                          className={`px-3 py-1.5 rounded-lg text-sm transition capitalize ${
+                            filterType === ft
+                              ? "bg-[#4F46E5] text-white"
+                              : "bg-[#F9FAFB] text-[#6B7280] hover:bg-[#E5E7EB]"
+                          }`}
+                        >
+                          {ft === "all" ? "All" : EVAL_TYPE_LABELS[ft]} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Questions list */}
+                <div className="bg-white rounded-xl border border-[#E5E7EB]">
+                  <div className="px-6 py-4 border-b border-[#E5E7EB]">
+                    <h2 className="text-sm text-[#111827]">
+                      Questions ({filteredQuestions.length})
+                    </h2>
+                  </div>
+
+                  {qLoading ? (
+                    <div className="flex justify-center py-16">
+                      <Loader2 className="w-8 h-8 text-[#4F46E5] animate-spin" />
+                    </div>
+                  ) : filteredQuestions.length === 0 ? (
+                    <div className="px-6 py-12 text-center text-[#6B7280]">
+                      <FileText className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="text-sm mb-3">
+                        {questions.length === 0
+                          ? "No questions yet. Add your first question to get started."
+                          : "No questions for this filter."}
+                      </p>
+                      {questions.length === 0 && (
+                        <button
+                          onClick={() => { resetQuestionForm(); setShowQuestionForm(true); }}
+                          className="inline-flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2 rounded-lg text-sm"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Add Question
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[#E5E7EB]">
+                      {filteredQuestions.map((q) => {
+                        const evalType = (q.evaluationType ?? q.evaluation_type ?? "self") as EvalType;
+                        return (
+                          <div key={q.id} className="px-6 py-5 hover:bg-[#F9FAFB] transition">
+                            <div className="flex items-start gap-4">
+                              <div
+                                className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                                  q.type === "rating"
+                                    ? "bg-[#FFFBEB] text-[#F59E0B]"
+                                    : "bg-[#ECFEFF] text-[#06B6D4]"
+                                }`}
+                              >
+                                {q.type === "rating" ? (
+                                  <Star className="w-5 h-5" />
+                                ) : (
+                                  <MessageSquare className="w-5 h-5" />
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-[#111827] mb-2">{q.text}</p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <Badge variant={EVAL_TYPE_VARIANTS[evalType]} size="sm">
+                                    {EVAL_TYPE_LABELS[evalType]}
+                                  </Badge>
+                                  <span className="text-xs text-[#6B7280]">
+                                    {q.type === "rating" ? "Rating" : "Text"}
+                                  </span>
+                                  <span className="text-xs text-[#6B7280]">•</span>
+                                  <span className="text-xs text-[#6B7280]">{q.category}</span>
+                                  {q.required && (
+                                    <>
+                                      <span className="text-xs text-[#6B7280]">•</span>
+                                      <span className="text-xs text-[#EF4444]">Required</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 flex-shrink-0">
+                                <button
+                                  onClick={() => handleEditQuestion(q)}
+                                  className="p-2 text-[#4F46E5] hover:bg-[#EEF2FF] rounded-lg transition"
+                                  title="Edit"
+                                >
+                                  <Edit className="w-4 h-4" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteQuestion(q)}
+                                  className="p-2 text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
+                                  title="Delete"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </main>
       </div>

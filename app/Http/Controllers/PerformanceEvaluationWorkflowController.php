@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\Company;
 use App\Models\Employee;
+use App\Models\EvaluationAnswer;
 use App\Models\EvaluationAssignment;
 use App\Models\EvaluationPeriod;
+use App\Models\EvaluationQuestion;
+use App\Models\EvaluationTemplate;
 use App\Models\PerformanceEvaluation;
 use App\Models\PerformanceSummary;
 use Illuminate\Http\JsonResponse;
@@ -34,21 +37,23 @@ class PerformanceEvaluationWorkflowController extends Controller
     public function storePeriod(Request $request): JsonResponse
     {
         $data = $request->validate([
-            'company_id' => ['nullable', 'integer', 'exists:companies,id'],
-            'name' => ['required', 'string', 'max:150'],
-            'start_date' => ['required', 'date'],
-            'startDate' => ['sometimes', 'date'],
-            'end_date' => ['required_without:endDate', 'date', 'after:start_date'],
-            'endDate' => ['sometimes', 'date'],
-            'status' => ['sometimes', 'string', Rule::in(['draft', 'active', 'upcoming', 'completed'])],
+            'company_id'  => ['nullable', 'integer', 'exists:companies,id'],
+            'name'        => ['required', 'string', 'max:150'],
+            'start_date'  => ['required', 'date'],
+            'startDate'   => ['sometimes', 'date'],
+            'end_date'    => ['required_without:endDate', 'date', 'after:start_date'],
+            'endDate'     => ['sometimes', 'date'],
+            'status'      => ['sometimes', 'string', Rule::in(['draft', 'active', 'upcoming', 'completed'])],
+            'template_id' => ['nullable', 'integer', 'exists:evaluation_templates,id'],
         ]);
 
         $period = EvaluationPeriod::create([
-            'company_id' => $data['company_id'] ?? Company::query()->orderBy('id')->value('id'),
-            'name' => $data['name'],
-            'start_date' => $data['start_date'] ?? $data['startDate'],
-            'end_date' => $data['end_date'] ?? $data['endDate'],
-            'status' => $data['status'] ?? 'active',
+            'company_id'  => $data['company_id'] ?? Company::query()->orderBy('id')->value('id'),
+            'name'        => $data['name'],
+            'start_date'  => $data['start_date'] ?? $data['startDate'],
+            'end_date'    => $data['end_date'] ?? $data['endDate'],
+            'status'      => $data['status'] ?? 'active',
+            'template_id' => $data['template_id'] ?? null,
         ]);
 
         return response()->json($this->periodPayload($period->loadCount(['assignments', 'evaluations'])), Response::HTTP_CREATED);
@@ -121,6 +126,57 @@ class PerformanceEvaluationWorkflowController extends Controller
         ], Response::HTTP_CREATED);
     }
 
+    /**
+     * Fetch the template questions for a given assignment.
+     * Used by employees to load dynamic questions in the evaluation form.
+     */
+    public function questionsForAssignment(Request $request, EvaluationAssignment $assignment): JsonResponse
+    {
+        $employee = $request->user('api') ?? $request->user();
+
+        // Only the assigned evaluator or admins can fetch the questions
+        if ($assignment->evaluator_id !== $employee->id && ! $employee->hasPermission('performance_create')) {
+            abort(Response::HTTP_FORBIDDEN, 'Not allowed to view this assignment.');
+        }
+
+        $period = $assignment->period;
+        $template = $period?->template;
+
+        if (! $template) {
+            // No template linked — return empty so frontend falls back to hardcoded questions
+            return response()->json(['data' => [], 'template' => null]);
+        }
+
+        $evaluationType = $assignment->evaluator_type; // self, peer, manager
+        $questions = $template->questions()
+            ->where('evaluation_type', $evaluationType)
+            ->with('options')
+            ->orderBy('sort_order')
+            ->get();
+
+        return response()->json([
+            'template' => [
+                'id'      => $template->id,
+                'title'   => $template->title,
+                'weights' => $template->weights,
+            ],
+            'data' => $questions->map(fn (EvaluationQuestion $q) => [
+                'id'             => $q->id,
+                'text'           => $q->text,
+                'type'           => $q->type,
+                'evaluationType' => $q->evaluation_type,
+                'category'       => $q->category,
+                'required'       => $q->required,
+                'weight'         => $q->weight,
+                'options'        => $q->options->map(fn ($o) => [
+                    'id'    => $o->id,
+                    'label' => $o->label,
+                    'value' => $o->value,
+                ]),
+            ]),
+        ]);
+    }
+
     public function submitEvaluation(Request $request, EvaluationAssignment $assignment): JsonResponse
     {
         $evaluator = $request->user('api') ?? $request->user();
@@ -134,6 +190,11 @@ class PerformanceEvaluationWorkflowController extends Controller
             'rating' => ['nullable', 'numeric', 'between:1,5'],
             'comments' => ['nullable', 'string'],
             'answers' => ['nullable', 'array'],
+            'answers.*.question_id' => ['sometimes', 'integer'],
+            'answers.*.rating' => ['sometimes', 'numeric'],
+            'answers.*.text_answer' => ['sometimes', 'string'],
+            'answers.*.text' => ['sometimes', 'string'],
+            'answers.*.selected_options' => ['sometimes', 'array'],
         ]);
 
         $score = $data['score'] ?? $data['rating'] ?? $this->scoreFromAnswers($data['answers'] ?? []);
@@ -154,6 +215,25 @@ class PerformanceEvaluationWorkflowController extends Controller
                 'status' => 'submitted',
             ]
         );
+
+        // Persist individual answers when question_id is provided
+        if (! empty($data['answers'])) {
+            foreach ($data['answers'] as $ans) {
+                if (! empty($ans['question_id'])) {
+                    EvaluationAnswer::updateOrCreate(
+                        [
+                            'evaluation_id' => $evaluation->id,
+                            'question_id'   => $ans['question_id'],
+                        ],
+                        [
+                            'rating'           => $ans['rating'] ?? null,
+                            'text_answer'      => $ans['text_answer'] ?? $ans['text'] ?? null,
+                            'selected_options' => $ans['selected_options'] ?? null,
+                        ]
+                    );
+                }
+            }
+        }
 
         $this->recalculateSummary($assignment->employee_id, $assignment->evaluation_period_id);
 
@@ -217,18 +297,46 @@ class PerformanceEvaluationWorkflowController extends Controller
             ->filter(fn (PerformanceEvaluation $evaluation) => $evaluation->assignment?->evaluator_type === $type)
             ->avg('score');
 
-        $self = $scoreFor('self');
-        $peer = $scoreFor('peer');
+        $self    = $scoreFor('self');
+        $peer    = $scoreFor('peer');
         $manager = $scoreFor('manager');
-        $scores = collect([$self, $peer, $manager])->filter(fn ($score) => $score !== null);
+
+        // ── Weighted final score using the period's linked template ────────
+        $period   = EvaluationPeriod::with('template')->find($periodId);
+        $weights  = $period?->template?->weights ?? null;
+
+        $finalScore = null;
+
+        if ($weights && isset($weights['self'], $weights['peer'], $weights['manager'])) {
+            // Only include types that have at least one submitted evaluation
+            $weightedSum   = 0.0;
+            $allocatedWeight = 0;
+
+            foreach (['self' => $self, 'peer' => $peer, 'manager' => $manager] as $type => $score) {
+                if ($score !== null) {
+                    $weightedSum     += $score * $weights[$type];
+                    $allocatedWeight += $weights[$type];
+                }
+            }
+
+            if ($allocatedWeight > 0) {
+                $finalScore = round($weightedSum / $allocatedWeight, 2);
+            }
+        } else {
+            // Fallback: simple average over available scores
+            $available = collect([$self, $peer, $manager])->filter(fn ($s) => $s !== null);
+            if ($available->count()) {
+                $finalScore = round($available->avg(), 2);
+            }
+        }
 
         return PerformanceSummary::updateOrCreate(
             ['employee_id' => $employeeId, 'evaluation_period_id' => $periodId],
             [
-                'self_score' => $self,
-                'peer_score' => $peer,
+                'self_score'    => $self,
+                'peer_score'    => $peer,
                 'manager_score' => $manager,
-                'final_score' => $scores->count() ? round($scores->avg(), 2) : null,
+                'final_score'   => $finalScore,
                 'calculated_at' => now(),
             ]
         );
