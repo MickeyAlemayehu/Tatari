@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Search, Filter, Eye, Trash2, MapPin, Briefcase, Clock, Users } from "lucide-react";
+import { Plus, Search, Filter, Eye, Trash2, MapPin, Briefcase, Clock, Users, Send, Loader2 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 import { jobsService, type JobRecord } from "../../services/jobs.service";
@@ -28,6 +28,7 @@ export function JobVacancies() {
 
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState<number | null>(null);
 
   useEffect(() => {
     jobsService
@@ -53,14 +54,40 @@ export function JobVacancies() {
       );
   }, []);
 
+  const handleDelete = async (job: Job) => {
+    if (!window.confirm(`Are you sure you want to delete "${job.title}"? This action cannot be undone.`)) return;
+    setActionLoading(job.id);
+    try {
+      await jobsService.remove(job.id);
+      setJobs((prev) => prev.filter((j) => j.id !== job.id));
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to delete job.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handlePublish = async (job: Job) => {
+    if (!window.confirm(`Publish "${job.title}"? This will make the posting visible to applicants.`)) return;
+    setActionLoading(job.id);
+    try {
+      await jobsService.update(job.id, { status: "open" });
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, status: "open" } : j)));
+    } catch (err) {
+      alert(err instanceof ApiError ? err.message : "Failed to publish job.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // Get unique departments
   const departments = Array.from(new Set(jobs.map(job => job.department)));
 
   // Filter jobs
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = job.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         job.location.toLowerCase().includes(searchQuery.toLowerCase());
+      job.department.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.location.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = filterStatus === "all" || job.status === filterStatus;
     const matchesDepartment = filterDepartment === "all" || job.department === filterDepartment;
     return matchesSearch && matchesStatus && matchesDepartment;
@@ -199,9 +226,8 @@ export function JobVacancies() {
                 {/* Filter Button */}
                 <button
                   onClick={() => setShowFilters(!showFilters)}
-                  className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg transition ${
-                    showFilters ? "bg-[#EEF2FF] border-[#4F46E5]/20 text-[#4F46E5]" : "bg-white border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
-                  }`}
+                  className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg transition ${showFilters ? "bg-[#EEF2FF] border-[#4F46E5]/20 text-[#4F46E5]" : "bg-white border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
+                    }`}
                 >
                   <Filter className="w-5 h-5" />
                   <span>Filters</span>
@@ -330,11 +356,31 @@ export function JobVacancies() {
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
+                              {job.status === "draft" && (
+                                <button
+                                  onClick={() => handlePublish(job)}
+                                  disabled={actionLoading === job.id}
+                                  className="p-2 text-[#22C55E] hover:bg-[#DCFCE7] rounded-lg transition disabled:opacity-50"
+                                  title="Publish"
+                                >
+                                  {actionLoading === job.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <Send className="w-4 h-4" />
+                                  )}
+                                </button>
+                              )}
                               <button
-                                className="p-2 text-[#6B7280] hover:bg-[#F9FAFB] rounded-lg transition"
-                                title="More Actions"
+                                onClick={() => handleDelete(job)}
+                                disabled={actionLoading === job.id}
+                                className="p-2 text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition disabled:opacity-50"
+                                title="Delete"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                {actionLoading === job.id ? (
+                                  <Loader2 className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
                               </button>
                             </div>
                           </td>
