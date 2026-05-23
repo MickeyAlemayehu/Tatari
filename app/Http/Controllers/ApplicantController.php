@@ -82,7 +82,7 @@ class ApplicantController extends Controller
         $reviewer = $request->user('api') ?? $request->user();
 
         $data = $request->validate([
-            'status' => ['sometimes', 'string', Rule::in(['new', 'reviewing', 'shortlisted', 'rejected', 'hired'])],
+            'status' => ['sometimes', 'string', Rule::in(['new', 'reviewing', 'shortlisted', 'rejected', 'hired', 'interview_scheduled'])],
             'rating' => ['nullable', 'numeric', 'between:0,5'],
             'rejection_reason' => ['nullable', 'string', 'max:2000'],
             'location' => ['nullable', 'string', 'max:255'],
@@ -90,6 +90,7 @@ class ApplicantController extends Controller
             'current_company' => ['nullable', 'string', 'max:255'],
             'education' => ['nullable', 'string', 'max:255'],
             'notice_period' => ['nullable', 'string', 'max:100'],
+            'interview_at' => ['nullable', 'date'],
         ]);
 
         if (array_key_exists('status', $data)) {
@@ -122,6 +123,7 @@ class ApplicantController extends Controller
             'location' => $applicant->location,
             'avatar' => strtoupper(substr($applicant->first_name, 0, 1).substr($applicant->last_name, 0, 1)),
             'rating' => $applicant->rating === null ? null : (float) $applicant->rating,
+            'interviewAt' => $applicant->interview_at?->toIso8601String(),
         ];
 
         if ($includeDetails) {

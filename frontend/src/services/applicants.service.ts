@@ -1,6 +1,14 @@
 import { api, apiRequest } from "../lib/api";
 import type { Paginated } from "../types/api";
 
+export type ApplicantStatus =
+  | "new"
+  | "reviewing"
+  | "shortlisted"
+  | "rejected"
+  | "hired"
+  | "interview_scheduled";
+
 export interface ApplicantRecord {
   id: number;
   name: string;
@@ -12,11 +20,12 @@ export interface ApplicantRecord {
   jobId?: number;
   department?: string;
   appliedDate?: string;
-  status: string;
+  status: ApplicantStatus | string;
   rating?: number;
   location?: string;
   experience?: string;
   coverLetter?: string;
+  interviewAt?: string | null;
 }
 
 export const applicantsService = {
@@ -31,8 +40,15 @@ export const applicantsService = {
 
   get: (id: number) => api.get<ApplicantRecord>(`/applicants/${id}`),
 
-  update: (id: number, payload: { status?: string; rating?: number; rejection_reason?: string }) =>
-    api.patch<ApplicantRecord>(`/applicants/${id}`, payload),
+  update: (
+    id: number,
+    payload: {
+      status?: ApplicantStatus;
+      rating?: number;
+      rejection_reason?: string;
+      interview_at?: string | null;
+    }
+  ) => api.patch<ApplicantRecord>(`/applicants/${id}`, payload),
 
   apply: (jobId: number, body: FormData) =>
     apiRequest<ApplicantRecord>(`/public/jobs/${jobId}/apply`, {

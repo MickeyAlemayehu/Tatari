@@ -126,6 +126,68 @@ class RecruitmentManagementTest extends TestCase
         ]);
     }
 
+    public function test_hr_can_schedule_interview_for_applicant(): void
+    {
+        [$company, $department] = $this->companyAndDepartment();
+        $hr = Employee::factory()->manager()->create([
+            'permission_override' => ['manage_employees' => true],
+        ]);
+        $job = JobVacancy::create($this->jobData($company, $department));
+        $applicant = Applicant::create([
+            'vacancy_id' => $job->id,
+            'first_name' => 'Sarah',
+            'last_name' => 'Chen',
+            'email' => 'sarah@example.com',
+            'phone' => '+1 555 1234',
+            'status' => 'new',
+            'applied_at' => now(),
+        ]);
+
+        $interviewAt = now()->addWeek()->setTime(14, 30);
+
+        $response = $this->actingAs($hr, 'api')->patchJson("/api/applicants/{$applicant->id}", [
+            'status' => 'interview_scheduled',
+            'interview_at' => $interviewAt->toIso8601String(),
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'interview_scheduled');
+
+        $this->assertNotNull($response->json('interviewAt'));
+
+        $this->assertDatabaseHas('applicants', [
+            'id' => $applicant->id,
+            'status' => 'interview_scheduled',
+            'reviewed_by' => $hr->id,
+        ]);
+
+        $applicant->refresh();
+        $this->assertEquals(
+            $interviewAt->toDateTimeString(),
+            $applicant->interview_at?->toDateTimeString()
+        );
+    }
+
+    public function test_staff_cannot_update_applicant_status(): void
+    {
+        [$company, $department] = $this->companyAndDepartment();
+        $staff = Employee::factory()->staff()->create();
+        $job = JobVacancy::create($this->jobData($company, $department));
+        $applicant = Applicant::create([
+            'vacancy_id' => $job->id,
+            'first_name' => 'Sarah',
+            'last_name' => 'Chen',
+            'email' => 'sarah@example.com',
+            'phone' => '+1 555 1234',
+            'status' => 'new',
+            'applied_at' => now(),
+        ]);
+
+        $this->actingAs($staff, 'api')->patchJson("/api/applicants/{$applicant->id}", [
+            'status' => 'hired',
+        ])->assertForbidden();
+    }
+
     public function test_staff_cannot_manage_jobs(): void
     {
         $staff = Employee::factory()->staff()->create();
