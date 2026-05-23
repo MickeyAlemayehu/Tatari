@@ -25,9 +25,12 @@ async function parseResponse<T>(response: Response): Promise<T> {
 
   if (!response.ok) {
     const payload = typeof body === "object" && body !== null ? body : { message: String(body) };
-    const message =
-      (payload as { message?: string }).message ??
-      `Request failed with status ${response.status}`;
+    const fallback = defaultMessageForStatus(response.status);
+    const rawMessage = (payload as { message?: string }).message;
+    // If we somehow got a non-JSON body (e.g. proxy/CDN HTML error page), don't surface raw
+    // HTML to the user — fall back to a generic, status-appropriate message.
+    const looksLikeHtml = !isJson && typeof rawMessage === "string" && /<\/?[a-z][\s\S]*>/i.test(rawMessage);
+    const message = looksLikeHtml || !rawMessage ? fallback : rawMessage;
 
     if (response.status === 401) {
       clearSession();
@@ -43,12 +46,37 @@ async function parseResponse<T>(response: Response): Promise<T> {
   return body as T;
 }
 
+function defaultMessageForStatus(status: number): string {
+  switch (status) {
+    case 401:
+      return "You need to sign in to continue.";
+    case 403:
+      return "You are not authorized to perform this action.";
+    case 404:
+      return "Resource not found.";
+    case 422:
+      return "The submitted data is invalid.";
+    case 429:
+      return "Too many requests. Please try again later.";
+    case 500:
+    case 502:
+    case 503:
+      return "The server encountered an error. Please try again.";
+    default:
+      return `Request failed with status ${status}`;
+  }
+}
+
 export async function apiRequest<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
   const { auth = true, headers, ...rest } = options;
   const requestHeaders = new Headers(headers);
+
+  if (!requestHeaders.has("Accept")) {
+    requestHeaders.set("Accept", "application/json");
+  }
 
   if (!requestHeaders.has("Content-Type") && rest.body && !(rest.body instanceof FormData)) {
     requestHeaders.set("Content-Type", "application/json");

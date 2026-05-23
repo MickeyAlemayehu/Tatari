@@ -15,7 +15,8 @@ class Employee extends Authenticatable
         'email','password','first_name','last_name','position',
         'department_id','manager_id','permission_level',
         'permission_override','custom_override','revoked_permissions',
-        'must_change_password','status'
+        'must_change_password','status',
+        'phone','date_of_birth','address','city','state','zip_code'
     ];
 
     protected $hidden = ['password', 'remember_token', 'api_token'];
@@ -25,7 +26,8 @@ class Employee extends Authenticatable
         'permission_override' => 'array',
         'custom_override' => 'array',
         'revoked_permissions' => 'array',
-        'must_change_password' => 'boolean'
+        'must_change_password' => 'boolean',
+        'date_of_birth' => 'date',
     ];
 
     protected static function booted(): void

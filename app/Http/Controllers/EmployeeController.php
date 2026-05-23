@@ -28,18 +28,26 @@ class EmployeeController extends Controller
             'email' => ['required', 'email', 'max:255', 'unique:employees,email'],
             'password' => ['required', 'string', 'min:8'],
             'position' => ['required', 'string', 'max:150'],
+            'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
+            'manager_id' => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
             'permission_level' => ['sometimes', 'integer', 'between:1,3'],
             'permission_override' => ['sometimes', 'array'],
             'custom_override' => ['sometimes', 'array'],
             'revoked_permissions' => ['sometimes', 'array'],
             'status' => ['sometimes', 'in:active,inactive'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'date_of_birth' => ['sometimes', 'nullable', 'date'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'city' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'state' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'zip_code' => ['sometimes', 'nullable', 'string', 'max:20'],
         ]);
 
         $data['permission_level'] = $data['permission_level'] ?? config('permission_levels.default_level', 1);
 
         $employee = Employee::create($data);
 
-        return response()->json($employee, Response::HTTP_CREATED);
+        return response()->json($employee->load('department:id,name', 'manager:id,first_name,last_name'), Response::HTTP_CREATED);
     }
 
     public function show(Employee $employee): JsonResponse
@@ -55,16 +63,24 @@ class EmployeeController extends Controller
             'email' => ['sometimes', 'email', 'max:255', Rule::unique('employees', 'email')->ignore($employee->id)],
             'password' => ['sometimes', 'string', 'min:8'],
             'position' => ['sometimes', 'string', 'max:150'],
+            'department_id' => ['sometimes', 'nullable', 'integer', 'exists:departments,id'],
+            'manager_id' => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
             'permission_level' => ['sometimes', 'integer', 'between:1,3'],
             'permission_override' => ['sometimes', 'array'],
             'custom_override' => ['sometimes', 'array'],
             'revoked_permissions' => ['sometimes', 'array'],
             'status' => ['sometimes', 'in:active,inactive'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:32'],
+            'date_of_birth' => ['sometimes', 'nullable', 'date'],
+            'address' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'city' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'state' => ['sometimes', 'nullable', 'string', 'max:100'],
+            'zip_code' => ['sometimes', 'nullable', 'string', 'max:20'],
         ]);
 
         $employee->update($data);
 
-        return response()->json($employee);
+        return response()->json($employee->load('department:id,name', 'manager:id,first_name,last_name'));
     }
 
     public function deactivate(Employee $employee): JsonResponse

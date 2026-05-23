@@ -8,6 +8,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -36,5 +37,22 @@ return Application::configure(basePath: dirname(__DIR__))
                     'message' => $exception->getMessage() ?: 'Forbidden.',
                 ], Response::HTTP_FORBIDDEN);
             }
+        });
+
+        $exceptions->render(function (HttpException $exception, Request $request) {
+            if (! $request->is('api/*')) {
+                return null;
+            }
+
+            $status = $exception->getStatusCode();
+            $defaults = [
+                Response::HTTP_FORBIDDEN => 'You are not authorized to perform this action.',
+                Response::HTTP_NOT_FOUND => 'Resource not found.',
+                Response::HTTP_METHOD_NOT_ALLOWED => 'Method not allowed.',
+            ];
+
+            return response()->json([
+                'message' => $exception->getMessage() ?: ($defaults[$status] ?? 'Request failed.'),
+            ], $status);
         });
     })->create();

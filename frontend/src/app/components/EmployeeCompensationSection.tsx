@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { DollarSign, Plus, Edit, Trash2, X, Save } from "lucide-react";
+import { DollarSign, Plus, Edit, Trash2, X, Save, ShieldAlert } from "lucide-react";
 import { Badge } from "./Badge";
 import { AsyncState } from "./AsyncState";
 import {
@@ -8,6 +8,7 @@ import {
 } from "../../services/compensations.service";
 import { ApiError } from "../../lib/api";
 import { formatDate } from "../../lib/utils";
+import { useAuth } from "../../contexts/AuthContext";
 
 interface EmployeeCompensationSectionProps {
   employeeId: number;
@@ -23,7 +24,12 @@ const emptyForm = {
   effective_to: "",
 };
 
+const UNAUTHORIZED_MESSAGE = "You are not authorized to update salary information.";
+
 export function EmployeeCompensationSection({ employeeId }: EmployeeCompensationSectionProps) {
+  const { hasPermission } = useAuth();
+  const canManage = hasPermission("manage_payroll");
+
   const [items, setItems] = useState<CompensationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -31,6 +37,8 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
   const [editing, setEditing] = useState<CompensationRecord | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -54,6 +62,7 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
   const openCreate = () => {
     setEditing(null);
     setForm(emptyForm);
+    setFormError(null);
     setShowModal(true);
   };
 
@@ -68,12 +77,23 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
       effective_from: record.effectiveFrom,
       effective_to: record.effectiveTo ?? "",
     });
+    setFormError(null);
     setShowModal(true);
+  };
+
+  const friendlyMessage = (err: unknown, fallback: string): string => {
+    if (err instanceof ApiError) {
+      if (err.status === 403) return UNAUTHORIZED_MESSAGE;
+      return err.message;
+    }
+    return fallback;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setFormError(null);
+    setActionError(null);
     try {
       const payload = {
         employee_id: employeeId,
@@ -95,7 +115,14 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
       setShowModal(false);
       await load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Failed to save compensation.");
+      const message = friendlyMessage(err, "Failed to save compensation.");
+      if (err instanceof ApiError && err.status === 403) {
+        // Permission denied — surface it on the section, not inside the modal, and close the modal.
+        setActionError(message);
+        setShowModal(false);
+      } else {
+        setFormError(message);
+      }
     } finally {
       setSaving(false);
     }
@@ -103,11 +130,12 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
 
   const handleDeactivate = async (id: number) => {
     if (!confirm("Deactivate this compensation record?")) return;
+    setActionError(null);
     try {
       await compensationsService.remove(id);
       await load();
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Failed to deactivate.");
+      setActionError(friendlyMessage(err, "Failed to deactivate."));
     }
   };
 
@@ -118,14 +146,23 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
           <DollarSign className="w-5 h-5 text-[#4F46E5]" />
           <h3 className="text-[#111827]">Compensation</h3>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white text-sm rounded-lg"
-        >
-          <Plus className="w-4 h-4" />
-          {active ? "Update salary" : "Set salary"}
-        </button>
+        {canManage && (
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white text-sm rounded-lg"
+          >
+            <Plus className="w-4 h-4" />
+            {active ? "Update salary" : "Set salary"}
+          </button>
+        )}
       </div>
+
+      {actionError && (
+        <div className="mb-4 p-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg flex items-start gap-2">
+          <ShieldAlert className="w-4 h-4 text-[#EF4444] mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-[#EF4444]">{actionError}</p>
+        </div>
+      )}
 
       <AsyncState loading={loading} error={error} empty={!loading && items.length === 0} emptyMessage="No compensation records yet.">
         {active && (
@@ -172,7 +209,9 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
                   <th className="px-4 py-2 text-left text-xs text-[#6B7280] uppercase">Basic</th>
                   <th className="px-4 py-2 text-left text-xs text-[#6B7280] uppercase">Gross</th>
                   <th className="px-4 py-2 text-left text-xs text-[#6B7280] uppercase">Status</th>
-                  <th className="px-4 py-2 text-right text-xs text-[#6B7280] uppercase">Actions</th>
+                  {canManage && (
+                    <th className="px-4 py-2 text-right text-xs text-[#6B7280] uppercase">Actions</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -193,24 +232,26 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
                         {row.status}
                       </Badge>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(row)}
-                          className="p-2 text-[#6B7280] hover:text-[#4F46E5] rounded-lg"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        {row.status === "active" && (
+                    {canManage && (
+                      <td className="px-4 py-3">
+                        <div className="flex justify-end gap-1">
                           <button
-                            onClick={() => void handleDeactivate(row.id)}
-                            className="p-2 text-[#6B7280] hover:text-[#EF4444] rounded-lg"
+                            onClick={() => openEdit(row)}
+                            className="p-2 text-[#6B7280] hover:text-[#4F46E5] rounded-lg"
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Edit className="w-4 h-4" />
                           </button>
-                        )}
-                      </div>
-                    </td>
+                          {row.status === "active" && (
+                            <button
+                              onClick={() => void handleDeactivate(row.id)}
+                              className="p-2 text-[#6B7280] hover:text-[#EF4444] rounded-lg"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -231,6 +272,11 @@ export function EmployeeCompensationSection({ employeeId }: EmployeeCompensation
               </button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {formError && (
+                <div className="p-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg text-sm text-[#EF4444]">
+                  {formError}
+                </div>
+              )}
               <div>
                 <label className="block text-sm text-[#111827] mb-1">Basic salary *</label>
                 <input

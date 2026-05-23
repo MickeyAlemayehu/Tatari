@@ -9,6 +9,7 @@ use App\Models\EvaluationTemplate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
 
 class EvaluationTemplateController extends Controller
@@ -56,6 +57,8 @@ class EvaluationTemplateController extends Controller
             'questions.*.options.*.label' => ['required_with:questions.*.options', 'string'],
             'questions.*.options.*.value' => ['sometimes', 'integer'],
         ]);
+
+        $this->assertWeightsSumTo100($data['weights'] ?? null);
 
         $template = EvaluationTemplate::create([
             'company_id'  => $data['company_id'] ?? Company::query()->orderBy('id')->value('id'),
@@ -115,6 +118,8 @@ class EvaluationTemplateController extends Controller
             'weights.manager' => ['sometimes', 'integer', 'min:0', 'max:100'],
         ]);
 
+        $this->assertWeightsSumTo100($data['weights'] ?? null);
+
         $template->update($data);
 
         return response()->json($this->templatePayload($template->loadCount('questions')));
@@ -165,6 +170,9 @@ class EvaluationTemplateController extends Controller
 
     public function storeQuestion(Request $request): JsonResponse
     {
+        // Accept both `evaluation_type` (snake_case, DB/PHP) and `evaluationType` (camelCase,
+        // frontend). The controller bridges the two conventions so the frontend doesn't need
+        // a separate adapter layer; on write we normalize to `evaluation_type` for storage.
         $data = $request->validate([
             'template_id'     => ['required', 'integer', 'exists:evaluation_templates,id'],
             'text'            => ['required', 'string', 'max:1000'],
@@ -286,6 +294,23 @@ class EvaluationTemplateController extends Controller
     // ──────────────────────────────────────────────
     // Payload helpers
     // ──────────────────────────────────────────────
+
+    private function assertWeightsSumTo100(?array $weights): void
+    {
+        if ($weights === null) {
+            return;
+        }
+
+        $sum = (int) ($weights['self'] ?? 0)
+             + (int) ($weights['peer'] ?? 0)
+             + (int) ($weights['manager'] ?? 0);
+
+        if ($sum !== 100) {
+            throw ValidationException::withMessages([
+                'weights' => 'The self, peer, and manager weights must sum to 100.',
+            ]);
+        }
+    }
 
     private function templatePayload(EvaluationTemplate $t, bool $includeQuestions = false): array
     {

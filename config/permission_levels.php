@@ -26,6 +26,7 @@ return [
                 'performance_create',
                 'performance_evaluate',
                 'manage_performance_reviews',
+                'manage_payroll',
             ],
             'landing_path' => '/hr/dashboard',
         ],
