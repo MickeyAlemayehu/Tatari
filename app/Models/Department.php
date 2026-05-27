@@ -9,7 +9,7 @@ class Department extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['company_id','name','description'];
+    protected $fillable = ['company_id','name','description','manager_id'];
 
     public function company() {
         return $this->belongsTo(Company::class);
@@ -17,5 +17,9 @@ class Department extends Model
 
     public function employees() {
         return $this->hasMany(Employee::class);
+    }
+
+    public function manager() {
+        return $this->belongsTo(Employee::class, 'manager_id');
     }
 }

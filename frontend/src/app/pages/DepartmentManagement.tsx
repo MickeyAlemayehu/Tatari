@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Edit, Trash2, X, Save, Building2 } from "lucide-react";
+import { Plus, Edit, Trash2, X, Save, Building2, CheckCircle } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 import { AsyncState } from "../components/AsyncState";
 import { departmentsService, type DepartmentRecord } from "../../services/departments.service";
+import { employeesService, type EmployeeRecord } from "../../services/employees.service";
 import { ApiError } from "../../lib/api";
 
 type Department = DepartmentRecord;
@@ -13,10 +14,16 @@ export function DepartmentManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    manager_id: number | null;
+  }>({
     name: "",
     description: "",
-    manager: "",
+    manager_id: null,
   });
   const [errors, setErrors] = useState({
     name: "",
@@ -24,13 +31,18 @@ export function DepartmentManagement() {
   });
 
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await departmentsService.list();
-      setDepartments(res.data);
+      const [deptRes, empRes] = await Promise.all([
+        departmentsService.list(),
+        employeesService.list({ per_page: 1000 }),
+      ]);
+      setDepartments(deptRes.data);
+      setEmployees(empRes.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load departments.");
     } finally {
@@ -42,31 +54,39 @@ export function DepartmentManagement() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!successMessage) return;
+    const t = setTimeout(() => setSuccessMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [successMessage]);
+
   const handleOpenModal = (department?: Department) => {
     if (department) {
       setEditingDepartment(department);
       setFormData({
         name: department.name,
         description: department.description ?? "",
-        manager: department.manager ?? "",
+        manager_id: department.manager_id ?? null,
       });
     } else {
       setEditingDepartment(null);
       setFormData({
         name: "",
         description: "",
-        manager: "",
+        manager_id: null,
       });
     }
     setErrors({ name: "", description: "" });
+    setSubmitError(null);
     setShowModal(true);
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingDepartment(null);
-    setFormData({ name: "", description: "", manager: "" });
+    setFormData({ name: "", description: "", manager_id: null });
     setErrors({ name: "", description: "" });
+    setSubmitError(null);
   };
 
   const validateForm = () => {
@@ -98,22 +118,27 @@ export function DepartmentManagement() {
     if (!validateForm()) return;
 
     setSaving(true);
+    setSubmitError(null);
     try {
       if (editingDepartment) {
         await departmentsService.update(editingDepartment.id, {
           name: formData.name,
           description: formData.description,
+          manager_id: formData.manager_id,
         });
       } else {
         await departmentsService.create({
           name: formData.name,
           description: formData.description,
+          manager_id: formData.manager_id,
         });
       }
+      const verb = editingDepartment ? "updated" : "created";
       await load();
       handleCloseModal();
+      setSuccessMessage(`Department ${verb} successfully.`);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Failed to save department.");
+      setSubmitError(err instanceof ApiError ? err.message : "Failed to save department.");
     } finally {
       setSaving(false);
     }
@@ -154,6 +179,21 @@ export function DepartmentManagement() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          {successMessage && (
+            <div className="mb-6 p-4 bg-[#DCFCE7] border border-green-200 rounded-lg flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-[#22C55E] mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm text-[#22C55E]">{successMessage}</p>
+              </div>
+              <button
+                onClick={() => setSuccessMessage(null)}
+                className="text-[#22C55E] hover:opacity-75"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <AsyncState loading={loading} error={error} empty={!loading && departments.length === 0}>
           <div className="bg-white rounded-xl border border-[#E5E7EB]">
             <div className="overflow-x-auto">
@@ -255,6 +295,11 @@ export function DepartmentManagement() {
 
             {/* Modal Body */}
             <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+              {submitError && (
+                <div className="p-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg text-sm text-[#EF4444]">
+                  {submitError}
+                </div>
+              )}
               {/* Department Name */}
               <div>
                 <label htmlFor="name" className="block text-sm text-[#111827] mb-2">
@@ -310,14 +355,25 @@ export function DepartmentManagement() {
                 <label htmlFor="manager" className="block text-sm text-[#111827] mb-2">
                   Department Manager
                 </label>
-                <input
+                <select
                   id="manager"
-                  type="text"
-                  value={formData.manager}
-                  onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                  placeholder="Manager name (optional)"
+                  value={formData.manager_id ?? ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      manager_id: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
                   className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition"
-                />
+                >
+                  <option value="">No manager</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.first_name} {emp.last_name}
+                      {emp.position ? ` — ${emp.position}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Modal Footer */}
@@ -325,13 +381,15 @@ export function DepartmentManagement() {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-6 py-2.5 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition"
+                  disabled={saving}
+                  className="px-6 py-2.5 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg"
+                  disabled={saving}
+                  className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Save className="w-5 h-5" />
                   <span>{saving ? "Saving..." : editingDepartment ? "Update" : "Create"}</span>

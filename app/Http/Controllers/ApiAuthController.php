@@ -82,4 +82,29 @@ class ApiAuthController extends Controller
 
         return response()->json(EmployeePermissions::toAuthArray($employee));
     }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $employee = $request->user('api');
+
+        if (! $employee) {
+            return response()->json(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', 'string', 'min:8', 'different:current_password'],
+        ]);
+
+        if (! Hash::check($data['current_password'], $employee->getAuthPassword())) {
+            return response()->json([
+                'message' => 'Current password is incorrect.',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $employee->password = $data['new_password'];
+        $employee->save();
+
+        return response()->json(['message' => 'Password updated successfully.']);
+    }
 }

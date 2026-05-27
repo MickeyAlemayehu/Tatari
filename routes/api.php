@@ -28,6 +28,8 @@ Route::post('/public/jobs/{jobVacancy}/apply', [ApplicantController::class, 'app
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me', [ApiAuthController::class, 'me']);
+    Route::post('/me/password', [ApiAuthController::class, 'changePassword']);
+    Route::get('/me/department', [DepartmentController::class, 'mine']);
 
     Route::middleware('employee.permission:access_employee_portal')->group(function () {
         Route::get('/leave-types', [LeaveManagementController::class, 'types']);

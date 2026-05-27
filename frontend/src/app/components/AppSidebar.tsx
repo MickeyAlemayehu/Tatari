@@ -319,7 +319,7 @@ export function AppSidebar() {
   };
 
   return (
-    <aside className="hidden lg:block w-64 bg-[#111827] border-r border-[rgba(255,255,255,0.1)] flex flex-col h-full fixed left-0 top-0 bottom-0">
+    <aside className="hidden lg:flex w-64 bg-[#111827] border-r border-[rgba(255,255,255,0.1)] flex-col h-full fixed left-0 top-0 bottom-0">
       {/* Logo/Brand */}
       <div className="px-6 py-5 border-b border-[rgba(255,255,255,0.1)] flex-shrink-0">
         <h2 className="text-base text-[#E5E7EB] font-semibold">HR System</h2>

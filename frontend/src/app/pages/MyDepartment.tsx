@@ -1,12 +1,27 @@
 import { useEffect, useState } from "react";
-import { Users, Mail, Phone, MapPin, Building2 } from "lucide-react";
+import { Users, Mail, Phone, Building2 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 import { AsyncState } from "../components/AsyncState";
 import { useAuth } from "../../contexts/AuthContext";
 import { departmentsService } from "../../services/departments.service";
-import { employeesService } from "../../services/employees.service";
 import { ApiError } from "../../lib/api";
 import { initials } from "../../lib/utils";
+
+type ManagerView = {
+  name: string;
+  position: string;
+  email: string;
+  phone: string;
+  avatar: string;
+};
+
+type TeamMember = {
+  id: number;
+  name: string;
+  position: string;
+  email: string;
+  avatar: string;
+};
 
 export function MyDepartment() {
   const { employee } = useAuth();
@@ -15,65 +30,58 @@ export function MyDepartment() {
   const [department, setDepartment] = useState({
     name: "",
     description: "",
-    location: "—",
     headCount: 0,
   });
-  const [manager, setManager] = useState<{
-    name: string;
-    position: string;
-    email: string;
-    phone: string;
-    avatar: string;
-  } | null>(null);
-  const [teamMembers, setTeamMembers] = useState<
-    { id: number; name: string; position: string; email: string; avatar: string }[]
-  >([]);
+  const [manager, setManager] = useState<ManagerView | null>(null);
+  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
 
   useEffect(() => {
-    if (!employee?.department_id) {
-      setLoading(false);
-      setError("You are not assigned to a department.");
-      return;
-    }
+    if (!employee) return;
 
-    const deptId = employee.department_id;
-    Promise.all([departmentsService.get(deptId), employeesService.list({ per_page: 200 })])
-      .then(([dept, employeesRes]) => {
-        const team = employeesRes.data.filter((e) => e.department_id === deptId);
+    setLoading(true);
+    setError(null);
+
+    departmentsService
+      .mine()
+      .then((dept) => {
         setDepartment({
           name: dept.name,
           description: dept.description ?? "—",
-          location: "—",
-          headCount: team.length,
+          headCount: dept.employeeCount,
         });
+
         setTeamMembers(
-          team.map((e) => ({
-            id: e.id,
-            name: `${e.first_name} ${e.last_name}`,
-            position: e.position ?? "—",
-            email: e.email,
-            avatar: initials(e.first_name, e.last_name),
+          dept.team.map((m) => ({
+            id: m.id,
+            name: `${m.first_name} ${m.last_name}`.trim(),
+            position: m.position ?? "—",
+            email: m.email ?? "—",
+            avatar: initials(m.first_name, m.last_name),
           }))
         );
-        const mgrName = dept.manager;
-        if (mgrName) {
-          const mgr = team.find((e) => `${e.first_name} ${e.last_name}` === mgrName);
+
+        if (dept.manager) {
+          const [firstName = "", lastName = ""] = dept.manager.name.split(" ");
           setManager({
-            name: mgrName,
-            position: mgr?.position ?? "Department Manager",
-            email: mgr?.email ?? "—",
+            name: dept.manager.name,
+            position: dept.manager.position ?? "Department Manager",
+            email: dept.manager.email ?? "—",
             phone: "—",
-            avatar: mgr
-              ? initials(mgr.first_name, mgr.last_name)
-              : mgrName.slice(0, 2).toUpperCase(),
+            avatar: initials(firstName, lastName) || dept.manager.name.slice(0, 2).toUpperCase(),
           });
+        } else {
+          setManager(null);
         }
       })
-      .catch((err) =>
-        setError(err instanceof ApiError ? err.message : "Failed to load department.")
-      )
+      .catch((err) => {
+        if (err instanceof ApiError && err.status === 404) {
+          setError("You are not assigned to a department.");
+        } else {
+          setError(err instanceof ApiError ? err.message : "Failed to load department.");
+        }
+      })
       .finally(() => setLoading(false));
-  }, [employee?.department_id]);
+  }, [employee]);
 
   return (
     <AppLayout title="My Department" subtitle="Your team and department information">
@@ -89,15 +97,9 @@ export function MyDepartment() {
                   <div className="flex-1">
                     <h2 className="text-2xl text-[#111827] mb-2">{department.name}</h2>
                     <p className="text-[#6B7280] mb-4">{department.description}</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="flex items-center gap-2 text-sm text-[#6B7280]">
-                        <MapPin className="w-4 h-4" />
-                        <span>{department.location}</span>
-                      </div>
-                      <div className="flex items-center gap-2 text-sm text-[#6B7280]">
-                        <Users className="w-4 h-4" />
-                        <span>{department.headCount} Team Members</span>
-                      </div>
+                    <div className="flex items-center gap-2 text-sm text-[#6B7280]">
+                      <Users className="w-4 h-4" />
+                      <span>{department.headCount} Team Members</span>
                     </div>
                   </div>
                 </div>
