@@ -26,6 +26,12 @@ class EvaluationPeriod extends Model
         return $this->belongsTo(EvaluationTemplate::class, 'template_id');
     }
 
+    public function templates() {
+        return $this->belongsToMany(EvaluationTemplate::class, 'evaluation_period_templates', 'evaluation_period_id', 'template_id')
+            ->withPivot('evaluation_type', 'department_id')
+            ->withTimestamps();
+    }
+
     public function assignments() {
         return $this->hasMany(EvaluationAssignment::class);
     }

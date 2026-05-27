@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ApplicantStatusUpdated;
 use App\Models\Applicant;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\Employee;
 use App\Models\JobVacancy;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class RecruitmentManagementTest extends TestCase
@@ -186,6 +190,131 @@ class RecruitmentManagementTest extends TestCase
         $this->actingAs($staff, 'api')->patchJson("/api/applicants/{$applicant->id}", [
             'status' => 'hired',
         ])->assertForbidden();
+    }
+
+    #[DataProvider('statusEmailProvider')]
+    public function test_status_change_sends_email_to_applicant(string $status): void
+    {
+        Mail::fake();
+        config(['mail.from.address' => 'hr@tatari.test']);
+
+        [$company, $department] = $this->companyAndDepartment();
+        $hr = Employee::factory()->manager()->create([
+            'permission_override' => ['manage_employees' => true],
+        ]);
+        $job = JobVacancy::create($this->jobData($company, $department));
+        $applicant = Applicant::create([
+            'vacancy_id' => $job->id,
+            'first_name' => 'Sarah',
+            'last_name' => 'Chen',
+            'email' => 'sarah@example.com',
+            'phone' => '+1 555 1234',
+            'status' => 'new',
+            'applied_at' => now(),
+        ]);
+
+        $payload = ['status' => $status];
+        if ($status === 'interview_scheduled') {
+            $payload['interview_at'] = now()->addWeek()->toIso8601String();
+        }
+
+        $this->actingAs($hr, 'api')
+            ->patchJson("/api/applicants/{$applicant->id}", $payload)
+            ->assertOk();
+
+        Mail::assertSent(ApplicantStatusUpdated::class, function (ApplicantStatusUpdated $mail) use ($applicant, $status) {
+            return $mail->hasTo($applicant->email)
+                && $mail->hasFrom('hr@tatari.test')
+                && $mail->status === $status
+                && $mail->applicant->id === $applicant->id;
+        });
+    }
+
+    public static function statusEmailProvider(): array
+    {
+        return [
+            'accepted'           => ['hired'],
+            'rejected'           => ['rejected'],
+            'waitlisted'         => ['shortlisted'],
+            'interview_scheduled' => ['interview_scheduled'],
+        ];
+    }
+
+    public function test_no_email_sent_when_status_does_not_change(): void
+    {
+        Mail::fake();
+
+        [$company, $department] = $this->companyAndDepartment();
+        $hr = Employee::factory()->manager()->create([
+            'permission_override' => ['manage_employees' => true],
+        ]);
+        $job = JobVacancy::create($this->jobData($company, $department));
+        $applicant = Applicant::create([
+            'vacancy_id' => $job->id,
+            'first_name' => 'Sarah',
+            'last_name' => 'Chen',
+            'email' => 'sarah@example.com',
+            'phone' => '+1 555 1234',
+            'status' => 'shortlisted',
+            'applied_at' => now(),
+        ]);
+
+        // Updating something other than status, or repeating the same status, must not send mail.
+        $this->actingAs($hr, 'api')
+            ->patchJson("/api/applicants/{$applicant->id}", ['rating' => 4.0])
+            ->assertOk();
+
+        $this->actingAs($hr, 'api')
+            ->patchJson("/api/applicants/{$applicant->id}", ['status' => 'shortlisted'])
+            ->assertOk();
+
+        Mail::assertNothingSent();
+    }
+
+    public function test_mailer_failure_does_not_break_status_update(): void
+    {
+        [$company, $department] = $this->companyAndDepartment();
+        $hr = Employee::factory()->manager()->create([
+            'permission_override' => ['manage_employees' => true],
+        ]);
+        $job = JobVacancy::create($this->jobData($company, $department));
+        $applicant = Applicant::create([
+            'vacancy_id' => $job->id,
+            'first_name' => 'Sarah',
+            'last_name' => 'Chen',
+            'email' => 'sarah@example.com',
+            'phone' => '+1 555 1234',
+            'status' => 'new',
+            'applied_at' => now(),
+        ]);
+
+        // Point the mailer at an unreachable SMTP host so sending throws.
+        config([
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp' => [
+                'transport' => 'smtp',
+                'host' => '127.0.0.1',
+                'port' => 1, // closed port — guarantees a transport failure
+                'username' => null,
+                'password' => null,
+                'timeout' => 1,
+                'scheme' => null,
+            ],
+        ]);
+
+        Log::shouldReceive('error')
+            ->once()
+            ->with('Failed to send applicant status email', \Mockery::on(fn ($ctx) => $ctx['applicant_id'] === $applicant->id && $ctx['status'] === 'hired'));
+
+        $response = $this->actingAs($hr, 'api')->patchJson("/api/applicants/{$applicant->id}", [
+            'status' => 'hired',
+        ]);
+
+        $response->assertOk()->assertJsonPath('status', 'hired');
+        $this->assertDatabaseHas('applicants', [
+            'id' => $applicant->id,
+            'status' => 'hired',
+        ]);
     }
 
     public function test_staff_cannot_manage_jobs(): void

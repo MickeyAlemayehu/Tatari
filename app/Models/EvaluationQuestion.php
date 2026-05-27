@@ -13,7 +13,6 @@ class EvaluationQuestion extends Model
         'template_id',
         'text',
         'type',
-        'evaluation_type',
         'category',
         'required',
         'sort_order',

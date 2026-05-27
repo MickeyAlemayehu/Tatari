@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ApplicantStatusUpdated;
 use App\Models\Applicant;
 use App\Models\JobVacancy;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -98,9 +101,36 @@ class ApplicantController extends Controller
             $data['reviewed_at'] = now();
         }
 
+        $previousStatus = $applicant->status;
         $applicant->update($data);
 
+        if (
+            array_key_exists('status', $data)
+            && $data['status'] !== $previousStatus
+            && in_array($data['status'], ['hired', 'rejected', 'shortlisted', 'interview_scheduled'], true)
+        ) {
+            $this->sendStatusNotification($applicant->fresh()->load('vacancy'), $data['status']);
+        }
+
         return response()->json($this->payload($applicant->fresh()->load(['vacancy.department', 'reviewer']), true));
+    }
+
+    private function sendStatusNotification(Applicant $applicant, string $status): void
+    {
+        if (! $applicant->email) {
+            return;
+        }
+
+        try {
+            Mail::to($applicant->email)->send(new ApplicantStatusUpdated($applicant, $status));
+        } catch (\Throwable $e) {
+            // Mailer failures must never block a successful status update. Log and move on.
+            Log::error('Failed to send applicant status email', [
+                'applicant_id' => $applicant->id,
+                'status'       => $status,
+                'error'        => $e->getMessage(),
+            ]);
+        }
     }
 
     public function payload(Applicant $applicant, bool $includeDetails = false): array

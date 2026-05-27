@@ -118,8 +118,12 @@ Route::middleware('auth:api')->group(function () {
     Route::middleware('employee.permission:performance_create')->group(function () {
         Route::get('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'periods']);
         Route::post('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'storePeriod']);
+        Route::post('/evaluation-periods/{period}/activate', [PerformanceEvaluationWorkflowController::class, 'activatePeriod']);
         Route::get('/evaluation-assignments', [PerformanceEvaluationWorkflowController::class, 'assignments']);
-        Route::post('/evaluation-assignments/assign-peers', [PerformanceEvaluationWorkflowController::class, 'assignPeers']);
+        Route::get('/evaluation-assignments/for-employee', [PerformanceEvaluationWorkflowController::class, 'assignmentsForEmployeeInPeriod']);
+        Route::post('/evaluation-assignments/upsert-for-employee', [PerformanceEvaluationWorkflowController::class, 'upsertEvaluatorsForEmployee']);
+        // Legacy alias — keeps old callers working
+        Route::post('/evaluation-assignments/assign-peers', [PerformanceEvaluationWorkflowController::class, 'upsertEvaluatorsForEmployee']);
         Route::get('/performance-results', [PerformanceEvaluationWorkflowController::class, 'results']);
 
         // Evaluation template CRUD

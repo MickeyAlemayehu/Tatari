@@ -26,6 +26,10 @@ import {
   type EvaluationQuestionRecord,
   type QuestionOptionInput,
 } from "../../services/performance.service";
+import {
+  departmentsService,
+  type DepartmentRecord,
+} from "../../services/departments.service";
 import { ApiError } from "../../lib/api";
 
 type EvalType = "self" | "peer" | "manager";
@@ -48,6 +52,8 @@ const EVAL_TYPE_VARIANTS: Record<EvalType, "info" | "success" | "default"> = {
 interface TemplateFormState {
   title: string;
   description: string;
+  evaluationType: EvalType;
+  departmentId: number | null;
   weightSelf: number;
   weightPeer: number;
   weightManager: number;
@@ -56,6 +62,8 @@ interface TemplateFormState {
 const emptyTemplateForm = (): TemplateFormState => ({
   title: "",
   description: "",
+  evaluationType: "self",
+  departmentId: null,
   weightSelf: 30,
   weightPeer: 30,
   weightManager: 40,
@@ -66,7 +74,6 @@ const emptyTemplateForm = (): TemplateFormState => ({
 interface QuestionFormState {
   text: string;
   type: QuestionType;
-  evaluationType: EvalType;
   category: string;
   required: boolean;
   weight: number;
@@ -75,7 +82,6 @@ interface QuestionFormState {
 const emptyQuestionForm = (): QuestionFormState => ({
   text: "",
   type: "rating",
-  evaluationType: "self",
   category: "",
   required: true,
   weight: 1,
@@ -92,9 +98,8 @@ export function EvaluationBuilder() {
   const [selectedTemplate, setSelectedTemplate] = useState<EvaluationTemplateRecord | null>(null);
 
   // ── Questions for selected template ───────────────────────────────────────
-  const [questions, setQuestions]   = useState<EvaluationQuestionRecord[]>([]);
-  const [qLoading, setQLoading]     = useState(false);
-  const [filterType, setFilterType] = useState<"all" | EvalType>("all");
+  const [questions, setQuestions] = useState<EvaluationQuestionRecord[]>([]);
+  const [qLoading, setQLoading]   = useState(false);
 
   // ── Template creation form ─────────────────────────────────────────────────
   const [showTemplateForm, setShowTemplateForm]   = useState(false);
@@ -108,6 +113,9 @@ export function EvaluationBuilder() {
   const [questionForm, setQuestionForm]         = useState<QuestionFormState>(emptyQuestionForm());
   const [questionSaving, setQuestionSaving]     = useState(false);
   const [questionFormErrors, setQuestionFormErrors] = useState({ text: "", category: "" });
+
+  // ── Departments (for the new template form) ───────────────────────────────
+  const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
 
   // ── General feedback ──────────────────────────────────────────────────────
   const [successMsg, setSuccessMsg] = useState("");
@@ -127,7 +135,10 @@ export function EvaluationBuilder() {
       .finally(() => setTemplatesLoading(false));
   };
 
-  useEffect(() => { loadTemplates(); }, []);
+  useEffect(() => {
+    loadTemplates();
+    departmentsService.list().then((res) => setDepartments(res.data)).catch(() => {});
+  }, []);
 
   // ── Load questions when template is selected ───────────────────────────────
   const loadQuestions = (templateId: number) => {
@@ -141,7 +152,6 @@ export function EvaluationBuilder() {
 
   const selectTemplate = (t: EvaluationTemplateRecord) => {
     setSelectedTemplate(t);
-    setFilterType("all");
     loadQuestions(t.id);
   };
 
@@ -160,9 +170,12 @@ export function EvaluationBuilder() {
     setTemplateSaving(true);
     setTemplateFormError("");
     try {
+      const description = templateForm.description.trim();
       const t = await performanceService.createTemplate({
         title: templateForm.title.trim(),
-        description: templateForm.description.trim() || undefined,
+        ...(description ? { description } : {}),
+        evaluation_type: templateForm.evaluationType,
+        department_id: templateForm.departmentId,
         weights: {
           self: templateForm.weightSelf,
           peer: templateForm.weightPeer,
@@ -240,7 +253,6 @@ export function EvaluationBuilder() {
         const updated = await performanceService.updateQuestion(editingQuestion.id, {
           text: questionForm.text.trim(),
           type: questionForm.type,
-          evaluationType: questionForm.evaluationType,
           category: questionForm.category.trim(),
           required: questionForm.required,
           weight: questionForm.weight,
@@ -252,7 +264,6 @@ export function EvaluationBuilder() {
           template_id: selectedTemplate.id,
           text: questionForm.text.trim(),
           type: questionForm.type,
-          evaluationType: questionForm.evaluationType,
           category: questionForm.category.trim(),
           required: questionForm.required,
           weight: questionForm.weight,
@@ -284,7 +295,6 @@ export function EvaluationBuilder() {
     setQuestionForm({
       text: q.text,
       type: q.type as QuestionType,
-      evaluationType: (q.evaluationType ?? q.evaluation_type ?? "self") as EvalType,
       category: q.category,
       required: q.required,
       weight: q.weight ?? 1,
@@ -317,12 +327,7 @@ export function EvaluationBuilder() {
     setShowQuestionForm(false);
   };
 
-  const filteredQuestions =
-    filterType === "all"
-      ? questions
-      : questions.filter(
-          (q) => (q.evaluationType ?? q.evaluation_type) === filterType
-        );
+  const filteredQuestions = questions;
 
   // ─────────────────────────────────────────────────────────────────────────
   // Render
@@ -432,6 +437,56 @@ export function EvaluationBuilder() {
                           className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition resize-none"
                         />
                       </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-[#111827] mb-1">
+                            Evaluation Type <span className="text-red-500">*</span>
+                          </label>
+                          <div className="grid grid-cols-3 gap-2">
+                            {(["self", "peer", "manager"] as const).map((t) => {
+                              const active = templateForm.evaluationType === t;
+                              const activeCls = {
+                                self: "bg-blue-100 text-blue-700 border-blue-300",
+                                peer: "bg-[#DCFCE7] text-[#22C55E] border-[#22C55E]/30",
+                                manager: "bg-[#EEF2FF] text-[#4F46E5] border-[#4F46E5]/30",
+                              }[t];
+                              return (
+                                <button
+                                  key={t}
+                                  type="button"
+                                  onClick={() => setTemplateForm({ ...templateForm, evaluationType: t })}
+                                  className={`px-3 py-2 rounded-lg border text-sm capitalize transition ${
+                                    active ? activeCls : "bg-[#F9FAFB] text-[#6B7280] border-[#E5E7EB] hover:bg-white"
+                                  }`}
+                                >
+                                  {EVAL_TYPE_LABELS[t]}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm text-[#111827] mb-1">Department</label>
+                          <select
+                            value={templateForm.departmentId ?? ""}
+                            onChange={(e) =>
+                              setTemplateForm({
+                                ...templateForm,
+                                departmentId: e.target.value === "" ? null : Number(e.target.value),
+                              })
+                            }
+                            className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
+                          >
+                            <option value="">All Departments (Default)</option>
+                            {departments.map((d) => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
                       <div>
                         <label className="block text-sm text-[#111827] mb-2">Score Weights (must total 100%)</label>
                         <div className="grid grid-cols-3 gap-3">
@@ -514,7 +569,7 @@ export function EvaluationBuilder() {
                             <FileText className="w-5 h-5 text-[#4F46E5]" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <h3 className="text-sm text-[#111827]">{t.title}</h3>
                               <Badge
                                 variant={t.status === "active" ? "success" : "default"}
@@ -522,6 +577,17 @@ export function EvaluationBuilder() {
                               >
                                 {t.status}
                               </Badge>
+                              {(() => {
+                                const et = (t.evaluationType ?? t.evaluation_type ?? "self") as EvalType;
+                                return (
+                                  <Badge variant={EVAL_TYPE_VARIANTS[et]} size="sm">
+                                    {EVAL_TYPE_LABELS[et]}
+                                  </Badge>
+                                );
+                              })()}
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-[#F9FAFB] border border-[#E5E7EB] text-[#6B7280]">
+                                {t.department?.name ?? "Default"}
+                              </span>
                             </div>
                             {t.description && (
                               <p className="text-xs text-[#6B7280] mb-2">{t.description}</p>
@@ -612,7 +678,7 @@ export function EvaluationBuilder() {
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Question type */}
                         <div>
                           <label className="block text-sm text-[#111827] mb-1">Type</label>
@@ -626,20 +692,6 @@ export function EvaluationBuilder() {
                             <option value="textarea">Long Text</option>
                             <option value="yes_no">Yes / No</option>
                             <option value="numeric">Numeric</option>
-                          </select>
-                        </div>
-
-                        {/* Evaluation type */}
-                        <div>
-                          <label className="block text-sm text-[#111827] mb-1">Evaluator</label>
-                          <select
-                            value={questionForm.evaluationType}
-                            onChange={(e) => setQuestionForm({ ...questionForm, evaluationType: e.target.value as EvalType })}
-                            className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
-                          >
-                            <option value="self">Self Evaluation</option>
-                            <option value="peer">Peer Evaluation</option>
-                            <option value="manager">Manager Evaluation</option>
                           </select>
                         </div>
 
@@ -705,32 +757,6 @@ export function EvaluationBuilder() {
                   </div>
                 )}
 
-                {/* Filter bar */}
-                <div className="mb-4 bg-white rounded-xl border border-[#E5E7EB] p-4">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm text-[#6B7280]">Filter:</span>
-                    {(["all", "self", "peer", "manager"] as const).map((ft) => {
-                      const count =
-                        ft === "all"
-                          ? questions.length
-                          : questions.filter((q) => (q.evaluationType ?? q.evaluation_type) === ft).length;
-                      return (
-                        <button
-                          key={ft}
-                          onClick={() => setFilterType(ft)}
-                          className={`px-3 py-1.5 rounded-lg text-sm transition capitalize ${
-                            filterType === ft
-                              ? "bg-[#4F46E5] text-white"
-                              : "bg-[#F9FAFB] text-[#6B7280] hover:bg-[#E5E7EB]"
-                          }`}
-                        >
-                          {ft === "all" ? "All" : EVAL_TYPE_LABELS[ft]} ({count})
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 {/* Questions list */}
                 <div className="bg-white rounded-xl border border-[#E5E7EB]">
                   <div className="px-6 py-4 border-b border-[#E5E7EB]">
@@ -764,7 +790,6 @@ export function EvaluationBuilder() {
                   ) : (
                     <div className="divide-y divide-[#E5E7EB]">
                       {filteredQuestions.map((q) => {
-                        const evalType = (q.evaluationType ?? q.evaluation_type ?? "self") as EvalType;
                         return (
                           <div key={q.id} className="px-6 py-5 hover:bg-[#F9FAFB] transition">
                             <div className="flex items-start gap-4">
@@ -784,9 +809,6 @@ export function EvaluationBuilder() {
                               <div className="flex-1 min-w-0">
                                 <p className="text-sm text-[#111827] mb-2">{q.text}</p>
                                 <div className="flex items-center gap-2 flex-wrap">
-                                  <Badge variant={EVAL_TYPE_VARIANTS[evalType]} size="sm">
-                                    {EVAL_TYPE_LABELS[evalType]}
-                                  </Badge>
                                   <span className="text-xs text-[#6B7280]">
                                     {q.type === "rating" ? "Rating" : "Text"}
                                   </span>

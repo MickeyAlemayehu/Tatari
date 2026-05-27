@@ -11,9 +11,11 @@ use App\Models\EvaluationQuestion;
 use App\Models\EvaluationTemplate;
 use App\Models\PerformanceEvaluation;
 use App\Models\PerformanceSummary;
+use App\Services\SelfEvaluationAutoAssigner;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -22,6 +24,7 @@ class PerformanceEvaluationWorkflowController extends Controller
     public function periods(Request $request): JsonResponse
     {
         $query = EvaluationPeriod::query()
+            ->with(['templates.department'])
             ->withCount(['assignments', 'evaluations'])
             ->latest('start_date');
 
@@ -34,7 +37,7 @@ class PerformanceEvaluationWorkflowController extends Controller
         ]);
     }
 
-    public function storePeriod(Request $request): JsonResponse
+    public function storePeriod(Request $request, SelfEvaluationAutoAssigner $autoAssigner): JsonResponse
     {
         $data = $request->validate([
             'company_id'  => ['nullable', 'integer', 'exists:companies,id'],
@@ -45,18 +48,68 @@ class PerformanceEvaluationWorkflowController extends Controller
             'endDate'     => ['sometimes', 'date'],
             'status'      => ['sometimes', 'string', Rule::in(['draft', 'active', 'upcoming', 'completed'])],
             'template_id' => ['nullable', 'integer', 'exists:evaluation_templates,id'],
+            'template_ids' => ['nullable', 'array'],
+            'template_ids.*.template_id'     => ['required_with:template_ids', 'integer', 'exists:evaluation_templates,id'],
+            'template_ids.*.evaluation_type' => ['required_with:template_ids', 'string', Rule::in(['self', 'peer', 'manager'])],
+            'template_ids.*.department_id'   => ['nullable', 'integer', 'exists:departments,id'],
         ]);
 
-        $period = EvaluationPeriod::create([
-            'company_id'  => $data['company_id'] ?? Company::query()->orderBy('id')->value('id'),
-            'name'        => $data['name'],
-            'start_date'  => $data['start_date'] ?? $data['startDate'],
-            'end_date'    => $data['end_date'] ?? $data['endDate'],
-            'status'      => $data['status'] ?? 'active',
-            'template_id' => $data['template_id'] ?? null,
-        ]);
+        $period = DB::transaction(function () use ($data) {
+            $period = EvaluationPeriod::create([
+                'company_id'  => $data['company_id'] ?? Company::query()->orderBy('id')->value('id'),
+                'name'        => $data['name'],
+                'start_date'  => $data['start_date'] ?? $data['startDate'],
+                'end_date'    => $data['end_date'] ?? $data['endDate'],
+                'status'      => $data['status'] ?? 'active',
+                'template_id' => $data['template_id'] ?? null,
+            ]);
 
-        return response()->json($this->periodPayload($period->loadCount(['assignments', 'evaluations'])), Response::HTTP_CREATED);
+            if (! empty($data['template_ids'])) {
+                $this->syncTemplates($period, $data['template_ids']);
+            }
+
+            return $period;
+        });
+
+        $warnings = [];
+        if (($data['status'] ?? 'active') === 'active') {
+            $warnings = $autoAssigner->assignFor($period);
+        }
+
+        $period->load(['templates.department'])->loadCount(['assignments', 'evaluations']);
+        $payload = $this->periodPayload($period);
+        $payload['selfWarnings'] = $warnings;
+
+        return response()->json($payload, Response::HTTP_CREATED);
+    }
+
+    public function activatePeriod(EvaluationPeriod $period, SelfEvaluationAutoAssigner $autoAssigner): JsonResponse
+    {
+        $period->update(['status' => 'active']);
+        $warnings = $autoAssigner->assignFor($period);
+
+        $period->load(['templates.department'])->loadCount(['assignments', 'evaluations']);
+        $payload = $this->periodPayload($period);
+        $payload['selfWarnings'] = $warnings;
+
+        return response()->json($payload);
+    }
+
+    /**
+     * Attach templates to a period via the pivot table. Replaces any existing pivot rows.
+     *
+     * @param array<int, array{template_id:int, evaluation_type:string, department_id?:int|null}> $templateRows
+     */
+    private function syncTemplates(EvaluationPeriod $period, array $templateRows): void
+    {
+        $sync = [];
+        foreach ($templateRows as $row) {
+            $sync[(int) $row['template_id']] = [
+                'evaluation_type' => $row['evaluation_type'],
+                'department_id'   => $row['department_id'] ?? null,
+            ];
+        }
+        $period->templates()->sync($sync);
     }
 
     public function assignments(Request $request): JsonResponse
@@ -94,36 +147,106 @@ class PerformanceEvaluationWorkflowController extends Controller
         ]);
     }
 
-    public function assignPeers(Request $request): JsonResponse
+    /**
+     * Legacy endpoint kept as an alias. Routes both /assign-peers and
+     * /upsert-for-employee here. New callers should use the explicit
+     * peers/manager structure; legacy callers passing `peer_ids` still work.
+     */
+    public function upsertEvaluatorsForEmployee(Request $request): JsonResponse
     {
         $assigner = $request->user('api') ?? $request->user();
+
         $data = $request->validate([
             'evaluation_period_id' => ['required', 'integer', 'exists:evaluation_periods,id'],
-            'employee_id' => ['required', 'integer', 'exists:employees,id'],
-            'peer_ids' => ['required', 'array', 'min:1', 'max:8'],
-            'peer_ids.*' => ['integer', 'exists:employees,id', 'different:employee_id'],
-            'manager_id' => ['nullable', 'integer', 'exists:employees,id'],
-            'include_self' => ['sometimes', 'boolean'],
+            'employee_id'          => ['required', 'integer', 'exists:employees,id'],
+
+            // New shape
+            'peers'                => ['sometimes', 'array', 'max:8'],
+            'peers.*.evaluator_id' => ['required_with:peers', 'integer', 'exists:employees,id', 'different:employee_id'],
+            'peers.*.template_id'  => ['nullable', 'integer', 'exists:evaluation_templates,id'],
+            'manager'              => ['sometimes', 'nullable', 'array'],
+            'manager.evaluator_id' => ['required_with:manager', 'integer', 'exists:employees,id'],
+            'manager.template_id'  => ['nullable', 'integer', 'exists:evaluation_templates,id'],
+
+            // Legacy shape (kept for backward compat with /assign-peers callers)
+            'peer_ids'             => ['sometimes', 'array', 'max:8'],
+            'peer_ids.*'           => ['integer', 'exists:employees,id', 'different:employee_id'],
+            'manager_id'           => ['sometimes', 'nullable', 'integer', 'exists:employees,id'],
         ]);
 
-        $created = collect();
+        $periodId   = (int) $data['evaluation_period_id'];
+        $employeeId = (int) $data['employee_id'];
 
-        if ($data['include_self'] ?? true) {
-            $created->push($this->assignment($data['evaluation_period_id'], $data['employee_id'], $data['employee_id'], 'self', $assigner->id));
+        // Normalise legacy → new
+        $peers = $data['peers']
+            ?? array_map(fn ($id) => ['evaluator_id' => (int) $id, 'template_id' => null], $data['peer_ids'] ?? []);
+
+        $manager = $data['manager'] ?? null;
+        if ($manager === null && ! empty($data['manager_id'])) {
+            $manager = ['evaluator_id' => (int) $data['manager_id'], 'template_id' => null];
         }
 
-        foreach (array_unique($data['peer_ids']) as $peerId) {
-            $created->push($this->assignment($data['evaluation_period_id'], $data['employee_id'], $peerId, 'peer', $assigner->id));
-        }
+        $created = DB::transaction(function () use ($periodId, $employeeId, $peers, $manager, $assigner) {
+            // Wipe existing peer + manager assignments for this (period, employee). Self assignments
+            // are managed by SelfEvaluationAutoAssigner and intentionally left alone.
+            EvaluationAssignment::query()
+                ->where('evaluation_period_id', $periodId)
+                ->where('employee_id', $employeeId)
+                ->whereIn('evaluator_type', ['peer', 'manager'])
+                ->delete();
 
-        if (! empty($data['manager_id'])) {
-            $created->push($this->assignment($data['evaluation_period_id'], $data['employee_id'], $data['manager_id'], 'manager', $assigner->id));
-        }
+            $rows = collect();
+
+            $seenPeerIds = [];
+            foreach ($peers as $peer) {
+                $evaluatorId = (int) $peer['evaluator_id'];
+                if (in_array($evaluatorId, $seenPeerIds, true)) continue;
+                $seenPeerIds[] = $evaluatorId;
+
+                $rows->push($this->assignment(
+                    $periodId, $employeeId, $evaluatorId, 'peer',
+                    $assigner->id, $peer['template_id'] ?? null, 'peer'
+                ));
+            }
+
+            if ($manager && ! empty($manager['evaluator_id'])) {
+                $rows->push($this->assignment(
+                    $periodId, $employeeId, (int) $manager['evaluator_id'], 'manager',
+                    $assigner->id, $manager['template_id'] ?? null, 'manager'
+                ));
+            }
+
+            return $rows;
+        });
 
         return response()->json([
             'message' => 'Evaluators assigned.',
-            'data' => $created->map(fn (EvaluationAssignment $assignment) => $this->assignmentPayload($assignment->load(['period', 'employee.department', 'evaluator.department', 'evaluation']))),
+            'data' => $created->map(fn (EvaluationAssignment $assignment) => $this->assignmentPayload(
+                $assignment->load(['period', 'employee.department', 'evaluator.department', 'evaluation', 'template'])
+            )),
         ], Response::HTTP_CREATED);
+    }
+
+    /**
+     * Returns the current peer + manager assignments for one employee in one period.
+     * Used by the redesigned Assign Evaluators panel to populate its initial state.
+     */
+    public function assignmentsForEmployeeInPeriod(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'evaluation_period_id' => ['required', 'integer', 'exists:evaluation_periods,id'],
+            'employee_id'          => ['required', 'integer', 'exists:employees,id'],
+        ]);
+
+        $rows = EvaluationAssignment::query()
+            ->with(['evaluator.department', 'template'])
+            ->where('evaluation_period_id', $data['evaluation_period_id'])
+            ->where('employee_id', $data['employee_id'])
+            ->get();
+
+        return response()->json([
+            'data' => $rows->map(fn (EvaluationAssignment $a) => $this->assignmentPayload($a)),
+        ]);
     }
 
     /**
@@ -139,36 +262,37 @@ class PerformanceEvaluationWorkflowController extends Controller
             abort(Response::HTTP_FORBIDDEN, 'Not allowed to view this assignment.');
         }
 
-        $period = $assignment->period;
-        $template = $period?->template;
+        // Prefer the template attached directly to the assignment; fall back to
+        // the period's legacy single template. Then verify the template's
+        // evaluation_type matches what this assignment is for.
+        $evaluationType = $assignment->evaluator_type; // self, peer, manager
+        $template       = $assignment->template ?? $assignment->period?->template;
 
-        if (! $template) {
-            // No template linked — return empty so frontend falls back to hardcoded questions
+        if (! $template || $template->evaluation_type !== $evaluationType) {
+            // No matching template — return empty so frontend falls back to hardcoded questions
             return response()->json(['data' => [], 'template' => null]);
         }
 
-        $evaluationType = $assignment->evaluator_type; // self, peer, manager
         $questions = $template->questions()
-            ->where('evaluation_type', $evaluationType)
             ->with('options')
             ->orderBy('sort_order')
             ->get();
 
         return response()->json([
             'template' => [
-                'id'      => $template->id,
-                'title'   => $template->title,
-                'weights' => $template->weights,
+                'id'             => $template->id,
+                'title'           => $template->title,
+                'evaluationType' => $template->evaluation_type,
+                'weights'        => $template->weights,
             ],
             'data' => $questions->map(fn (EvaluationQuestion $q) => [
-                'id'             => $q->id,
-                'text'           => $q->text,
-                'type'           => $q->type,
-                'evaluationType' => $q->evaluation_type,
-                'category'       => $q->category,
-                'required'       => $q->required,
-                'weight'         => $q->weight,
-                'options'        => $q->options->map(fn ($o) => [
+                'id'       => $q->id,
+                'text'     => $q->text,
+                'type'     => $q->type,
+                'category' => $q->category,
+                'required' => $q->required,
+                'weight'   => $q->weight,
+                'options'  => $q->options->map(fn ($o) => [
                     'id'    => $o->id,
                     'label' => $o->label,
                     'value' => $o->value,
@@ -269,18 +393,27 @@ class PerformanceEvaluationWorkflowController extends Controller
         ]);
     }
 
-    private function assignment(int $periodId, int $employeeId, int $evaluatorId, string $type, ?int $assignedBy): EvaluationAssignment
-    {
+    private function assignment(
+        int $periodId,
+        int $employeeId,
+        int $evaluatorId,
+        string $type,
+        ?int $assignedBy,
+        ?int $templateId = null,
+        ?string $role = null
+    ): EvaluationAssignment {
         return EvaluationAssignment::updateOrCreate(
             [
                 'evaluation_period_id' => $periodId,
-                'employee_id' => $employeeId,
-                'evaluator_id' => $evaluatorId,
-                'evaluator_type' => $type,
+                'employee_id'          => $employeeId,
+                'evaluator_id'         => $evaluatorId,
+                'evaluator_type'       => $type,
             ],
             [
-                'assigned_by' => $assignedBy,
-                'assigned_at' => now(),
+                'template_id'    => $templateId,
+                'evaluator_role' => $role,
+                'assigned_by'    => $assignedBy,
+                'assigned_at'    => now(),
             ]
         );
     }
@@ -301,9 +434,10 @@ class PerformanceEvaluationWorkflowController extends Controller
         $peer    = $scoreFor('peer');
         $manager = $scoreFor('manager');
 
-        // ── Weighted final score using the period's linked template ────────
-        $period   = EvaluationPeriod::with('template')->find($periodId);
-        $weights  = $period?->template?->weights ?? null;
+        // ── Weighted final score, resolved from the period's self-template (or fallback) ──
+        $period = EvaluationPeriod::with(['template', 'templates'])->find($periodId);
+        $employee = Employee::find($employeeId);
+        $weights = $period ? $this->weightsForEmployee($period, $employee) : null;
 
         $finalScore = null;
 
@@ -349,37 +483,104 @@ class PerformanceEvaluationWorkflowController extends Controller
         return $ratings->count() ? round($ratings->avg(), 2) : null;
     }
 
+    /**
+     * Resolve the weight split that drives the final score for one employee in one period.
+     *  - prefer the period's attached self-template that matches the employee's department
+     *  - else the period's first attached self-template
+     *  - else the legacy period->template->weights
+     *  - else {30, 30, 40}
+     */
+    private function weightsForEmployee(EvaluationPeriod $period, ?Employee $employee): array
+    {
+        $deptId = $employee?->department_id;
+        $weights = null;
+
+        if ($period->relationLoaded('templates') || $period->templates) {
+            $selfTemplates = $period->templates->where('pivot.evaluation_type', 'self');
+
+            if ($deptId) {
+                $match = $selfTemplates->first(fn ($t) => (int) $t->pivot->department_id === (int) $deptId);
+                if ($match) $weights = $match->weights;
+            }
+
+            if (! $weights) {
+                $globalSelf = $selfTemplates->first(fn ($t) => $t->pivot->department_id === null);
+                if ($globalSelf) $weights = $globalSelf->weights;
+            }
+
+            if (! $weights) {
+                $first = $selfTemplates->first();
+                if ($first) $weights = $first->weights;
+            }
+        }
+
+        if (! $weights) {
+            $weights = $period->template?->weights;
+        }
+
+        if (! $weights || ! isset($weights['self'], $weights['peer'], $weights['manager'])) {
+            $weights = ['self' => 30, 'peer' => 30, 'manager' => 40];
+        }
+
+        return $weights;
+    }
+
     private function periodPayload(EvaluationPeriod $period): array
     {
-        $total = $period->assignments_count ?? $period->assignments()->count();
+        $total     = $period->assignments_count ?? $period->assignments()->count();
         $completed = $period->evaluations_count ?? $period->evaluations()->count();
 
+        $templates = [];
+        if ($period->relationLoaded('templates')) {
+            $templates = $period->templates->map(fn (EvaluationTemplate $t) => [
+                'id'              => $t->id,
+                'title'           => $t->title,
+                'evaluationType'  => $t->pivot->evaluation_type ?? $t->evaluation_type,
+                'departmentId'    => $t->pivot->department_id,
+                'departmentName'  => $t->department?->name,
+            ])->values()->all();
+        }
+
         return [
-            'id' => $period->id,
-            'title' => $period->name,
-            'name' => $period->name,
-            'startDate' => $period->start_date?->toDateString(),
-            'endDate' => $period->end_date?->toDateString(),
-            'status' => $period->status,
-            'completed' => $completed,
+            'id'             => $period->id,
+            'title'          => $period->name,
+            'name'           => $period->name,
+            'startDate'      => $period->start_date?->toDateString(),
+            'endDate'        => $period->end_date?->toDateString(),
+            'status'         => $period->status,
+            'completed'      => $completed,
             'totalEmployees' => $total,
-            'progress' => $total ? round(($completed / $total) * 100) : 0,
+            'progress'       => $total ? round(($completed / $total) * 100) : 0,
+            'templates'      => $templates,
         ];
     }
 
     private function assignmentPayload(EvaluationAssignment $assignment): array
     {
+        $template = null;
+        if ($assignment->relationLoaded('template') && $assignment->template) {
+            $template = [
+                'id'    => $assignment->template->id,
+                'title' => $assignment->template->title,
+            ];
+        } elseif ($assignment->template_id) {
+            $template = ['id' => $assignment->template_id, 'title' => null];
+        }
+
         return [
-            'id' => $assignment->id,
+            'id'                   => $assignment->id,
             'evaluation_period_id' => $assignment->evaluation_period_id,
-            'period' => $assignment->period?->name,
-            'employee_id' => $assignment->employee_id,
-            'employee' => $this->employeePayload($assignment->employee),
-            'evaluator_id' => $assignment->evaluator_id,
-            'evaluator' => $this->employeePayload($assignment->evaluator),
-            'type' => $assignment->evaluator_type,
-            'status' => $assignment->evaluation ? $assignment->evaluation->status : 'pending',
-            'score' => $assignment->evaluation?->score === null ? null : (float) $assignment->evaluation->score,
+            'period'               => $assignment->period?->name,
+            'employee_id'          => $assignment->employee_id,
+            'employee'             => $this->employeePayload($assignment->employee),
+            'evaluator_id'         => $assignment->evaluator_id,
+            'evaluator'            => $this->employeePayload($assignment->evaluator),
+            'type'                 => $assignment->evaluator_type,
+            'evaluatorRole'        => $assignment->evaluator_role,
+            'templateId'           => $assignment->template_id,
+            'template'             => $template,
+            'status'               => $assignment->evaluation ? $assignment->evaluation->status : 'pending',
+            'score'                => $assignment->evaluation?->score === null ? null : (float) $assignment->evaluation->score,
         ];
     }
 

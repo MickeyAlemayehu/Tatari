@@ -4,12 +4,20 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { ApiError } from "../lib/api";
 import { canAccessPortal, getDefaultDashboard } from "../lib/portal-access";
-import { clearSession, getStoredPortal, getStoredToken, saveSession } from "../lib/auth-storage";
+import {
+  clearSession,
+  getStoredPortal,
+  getStoredToken,
+  isSessionExpired,
+  saveSession,
+  touchLastActivity,
+} from "../lib/auth-storage";
 import {
   fetchCurrentUser,
   getStoredSession,
@@ -80,6 +88,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
         return;
       }
+      if (isSessionExpired()) {
+        clearSession();
+        setEmployee(null);
+        setPortal(null);
+        setIsLoading(false);
+        return;
+      }
       await refreshUser();
       setIsLoading(false);
     };
@@ -109,6 +124,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setPortal(null);
   }, []);
 
+  const isAuthenticated = Boolean(employee && portal);
+  const logoutRef = useRef(logout);
+  logoutRef.current = logout;
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    touchLastActivity();
+
+    let lastWrite = Date.now();
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastWrite < 30_000) return;
+      lastWrite = now;
+      touchLastActivity();
+    };
+
+    const events: (keyof WindowEventMap)[] = [
+      "mousedown",
+      "keydown",
+      "scroll",
+      "touchstart",
+    ];
+    events.forEach((event) => window.addEventListener(event, handleActivity, { passive: true }));
+
+    const interval = window.setInterval(() => {
+      if (isSessionExpired()) {
+        void logoutRef.current();
+      }
+    }, 30_000);
+
+    return () => {
+      events.forEach((event) => window.removeEventListener(event, handleActivity));
+      window.clearInterval(interval);
+    };
+  }, [isAuthenticated]);
+
   const effectivePermissions = employee?.effective_permissions ?? [];
   const permissionLevel = employee?.permission_level ?? null;
   const landingPath = employee ? getDefaultDashboard(employee) : "/login";
@@ -122,7 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       employee,
       portal,
       isLoading,
-      isAuthenticated: Boolean(employee && portal),
+      isAuthenticated,
       login,
       logout,
       refreshUser,
@@ -135,6 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       employee,
       portal,
       isLoading,
+      isAuthenticated,
       login,
       logout,
       refreshUser,

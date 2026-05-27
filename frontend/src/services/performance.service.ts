@@ -1,6 +1,20 @@
 import { api } from "../lib/api";
 import type { ListResponse } from "../types/api";
 
+export interface EvaluationPeriodTemplate {
+  id: number;
+  title: string;
+  evaluationType: "self" | "peer" | "manager";
+  departmentId: number | null;
+  departmentName: string | null;
+}
+
+export interface SelfWarning {
+  employee_id: number;
+  employee_name?: string;
+  reason: string;
+}
+
 export interface EvaluationPeriodRecord {
   id: number;
   title?: string;
@@ -12,12 +26,17 @@ export interface EvaluationPeriodRecord {
   completed?: number;
   totalEmployees?: number;
   progress?: number;
+  templates?: EvaluationPeriodTemplate[];
+  selfWarnings?: SelfWarning[];
 }
 
 export interface EvaluationAssignmentRecord {
   id: number;
   evaluation_period_id?: number;
   type: string;
+  evaluatorRole?: string | null;
+  templateId?: number | null;
+  template?: { id: number; title: string | null } | null;
   status: string;
   employee?: { id: number; name: string; department?: string; position?: string };
   evaluator?: { id: number; name: string };
@@ -47,6 +66,11 @@ export interface EvaluationTemplateRecord {
   title: string;
   description?: string;
   status: string;
+  evaluationType?: "self" | "peer" | "manager";
+  evaluation_type?: "self" | "peer" | "manager";
+  departmentId?: number | null;
+  department_id?: number | null;
+  department?: { id: number; name: string | null } | null;
   weights?: { self: number; peer: number; manager: number };
   questionCount?: number;
   questions?: EvaluationQuestionRecord[];
@@ -59,8 +83,6 @@ export interface EvaluationQuestionRecord {
   template_id: number;
   text: string;
   type: string;
-  evaluationType: string;
-  evaluation_type?: string;
   category: string;
   required: boolean;
   sort_order?: number;
@@ -85,7 +107,15 @@ export const performanceService = {
     end_date: string;
     status?: string;
     template_id?: number;
+    template_ids?: Array<{
+      template_id: number;
+      evaluation_type: "self" | "peer" | "manager";
+      department_id?: number | null;
+    }>;
   }) => api.post<EvaluationPeriodRecord>("/evaluation-periods", payload),
+
+  activatePeriod: (periodId: number) =>
+    api.post<EvaluationPeriodRecord>(`/evaluation-periods/${periodId}/activate`),
 
   // ── Assignments ───────────────────────────
   myAssignments: () =>
@@ -105,6 +135,27 @@ export const performanceService = {
     employee_id: number;
     peer_ids: number[];
   }) => api.post("/evaluation-assignments/assign-peers", payload),
+
+  upsertEvaluatorsForEmployee: (payload: {
+    evaluation_period_id: number;
+    employee_id: number;
+    peers: Array<{ evaluator_id: number; template_id: number | null }>;
+    manager: { evaluator_id: number; template_id: number | null } | null;
+  }) =>
+    api.post<{ message: string; data: EvaluationAssignmentRecord[] }>(
+      "/evaluation-assignments/upsert-for-employee",
+      payload
+    ),
+
+  assignmentsForEmployeeInPeriod: (params: {
+    evaluation_period_id: number;
+    employee_id: number;
+  }) => {
+    const qs = `?evaluation_period_id=${params.evaluation_period_id}&employee_id=${params.employee_id}`;
+    return api.get<ListResponse<EvaluationAssignmentRecord>>(
+      `/evaluation-assignments/for-employee${qs}`
+    );
+  },
 
   submitEvaluation: (
     assignmentId: number,
@@ -130,18 +181,31 @@ export const performanceService = {
     api.get<{ data: PerformanceSummaryRecord[] }>("/performance-results/my"),
 
   // ── Templates ─────────────────────────────
-  templates: () =>
-    api.get<ListResponse<EvaluationTemplateRecord>>("/evaluation-templates"),
+  templates: (params?: {
+    evaluation_type?: "self" | "peer" | "manager";
+    department_id?: number | "null" | null;
+    status?: string;
+  }) => {
+    const parts: string[] = [];
+    if (params?.evaluation_type) parts.push(`evaluation_type=${params.evaluation_type}`);
+    if (params?.status) parts.push(`status=${params.status}`);
+    if (params?.department_id === null) parts.push("department_id=null");
+    else if (typeof params?.department_id === "number") parts.push(`department_id=${params.department_id}`);
+    else if (params?.department_id === "null") parts.push("department_id=null");
+    const qs = parts.length ? `?${parts.join("&")}` : "";
+    return api.get<ListResponse<EvaluationTemplateRecord>>(`/evaluation-templates${qs}`);
+  },
 
   createTemplate: (payload: {
     title: string;
     description?: string;
     status?: string;
+    evaluation_type: "self" | "peer" | "manager";
+    department_id?: number | null;
     weights?: { self: number; peer: number; manager: number };
     questions?: Array<{
       text: string;
       type?: string;
-      evaluationType?: string;
       category?: string;
       required?: boolean;
       weight?: number;
@@ -158,6 +222,8 @@ export const performanceService = {
       title: string;
       description: string;
       status: string;
+      evaluation_type: "self" | "peer" | "manager";
+      department_id: number | null;
       weights: { self: number; peer: number; manager: number };
     }>
   ) =>
@@ -183,6 +249,7 @@ export const performanceService = {
     template_id?: number;
     evaluation_type?: string;
   }) => {
+    // evaluation_type now filters by parent template's type (server resolves the join)
     const parts: string[] = [];
     if (params?.template_id) parts.push(`template_id=${params.template_id}`);
     if (params?.evaluation_type)
@@ -197,7 +264,6 @@ export const performanceService = {
     template_id: number;
     text: string;
     type?: string;
-    evaluationType?: string;
     category?: string;
     required?: boolean;
     weight?: number;
@@ -209,7 +275,6 @@ export const performanceService = {
     payload: Partial<{
       text: string;
       type: string;
-      evaluationType: string;
       category: string;
       required: boolean;
       weight: number;

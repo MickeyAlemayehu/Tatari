@@ -29,25 +29,26 @@ interface Answer {
   text?: string;
 }
 
-// Fallback questions used when no template is linked to the period
+// Fallback questions used when no template is linked to the period. The
+// fallback set is chosen by the assignment's evaluator_type (the route param).
 const FALLBACK_QUESTIONS: Record<string, EvaluationQuestionRecord[]> = {
   self: [
-    { id: -1, template_id: 0, text: "How would you rate your overall performance this quarter?", type: "rating", evaluationType: "self", category: "Overall Performance", required: true },
-    { id: -2, template_id: 0, text: "What were your major accomplishments this quarter?", type: "text",   evaluationType: "self", category: "Accomplishments",      required: true },
-    { id: -3, template_id: 0, text: "Rate your achievement of quarterly goals",                            type: "rating", evaluationType: "self", category: "Goals Achievement",   required: true },
-    { id: -4, template_id: 0, text: "What areas would you like to develop or improve?",                    type: "text",   evaluationType: "self", category: "Development Areas",   required: true },
+    { id: -1, template_id: 0, text: "How would you rate your overall performance this quarter?", type: "rating", category: "Overall Performance", required: true },
+    { id: -2, template_id: 0, text: "What were your major accomplishments this quarter?",        type: "text",   category: "Accomplishments",     required: true },
+    { id: -3, template_id: 0, text: "Rate your achievement of quarterly goals",                  type: "rating", category: "Goals Achievement",   required: true },
+    { id: -4, template_id: 0, text: "What areas would you like to develop or improve?",          type: "text",   category: "Development Areas",   required: true },
   ],
   peer: [
-    { id: -1, template_id: 0, text: "Rate the employee's collaboration and teamwork skills",                         type: "rating", evaluationType: "peer", category: "Collaboration",      required: true },
-    { id: -2, template_id: 0, text: "Provide specific examples of how this employee contributes to team success",    type: "text",   evaluationType: "peer", category: "Team Contribution", required: true },
-    { id: -3, template_id: 0, text: "How effective is this employee's communication?",                               type: "rating", evaluationType: "peer", category: "Communication",      required: true },
-    { id: -4, template_id: 0, text: "How would you rate their innovative thinking?",                                 type: "rating", evaluationType: "peer", category: "Innovation",         required: true },
+    { id: -1, template_id: 0, text: "Rate the employee's collaboration and teamwork skills",                      type: "rating", category: "Collaboration",     required: true },
+    { id: -2, template_id: 0, text: "Provide specific examples of how this employee contributes to team success", type: "text",   category: "Team Contribution", required: true },
+    { id: -3, template_id: 0, text: "How effective is this employee's communication?",                            type: "rating", category: "Communication",     required: true },
+    { id: -4, template_id: 0, text: "How would you rate their innovative thinking?",                              type: "rating", category: "Innovation",        required: true },
   ],
   manager: [
-    { id: -1, template_id: 0, text: "Rate the employee's achievement of goals and objectives", type: "rating", evaluationType: "manager", category: "Goals & Objectives",  required: true },
-    { id: -2, template_id: 0, text: "Assess their performance in core competencies",           type: "rating", evaluationType: "manager", category: "Core Competencies",  required: true },
-    { id: -3, template_id: 0, text: "Evaluate their leadership potential",                     type: "rating", evaluationType: "manager", category: "Leadership",          required: true },
-    { id: -4, template_id: 0, text: "Describe the employee's strengths and areas for development", type: "text", evaluationType: "manager", category: "Development",     required: true },
+    { id: -1, template_id: 0, text: "Rate the employee's achievement of goals and objectives",      type: "rating", category: "Goals & Objectives", required: true },
+    { id: -2, template_id: 0, text: "Assess their performance in core competencies",                type: "rating", category: "Core Competencies",  required: true },
+    { id: -3, template_id: 0, text: "Evaluate their leadership potential",                          type: "rating", category: "Leadership",         required: true },
+    { id: -4, template_id: 0, text: "Describe the employee's strengths and areas for development", type: "text",   category: "Development",        required: true },
   ],
 };
 

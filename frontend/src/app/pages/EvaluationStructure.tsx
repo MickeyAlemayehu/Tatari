@@ -132,12 +132,11 @@ export function EvaluationStructure() {
 
         if (cancelled) return;
 
+        // Questions now inherit their evaluation_type from the parent template.
+        const templateType = (active.evaluationType ?? active.evaluation_type ?? "self") as EvalType;
         const g: GroupedQuestions = { self: [], peer: [], manager: [] };
-        for (const q of questions) {
-          const et = (q.evaluationType ?? q.evaluation_type ?? "").toLowerCase() as EvalType;
-          if (et === "self" || et === "peer" || et === "manager") {
-            g[et].push(q);
-          }
+        if (templateType === "self" || templateType === "peer" || templateType === "manager") {
+          g[templateType] = questions;
         }
 
         setGrouped(g);
@@ -156,7 +155,9 @@ export function EvaluationStructure() {
     };
   }, []);
 
-  const weights = template?.weights ?? { self: 0, peer: 0, manager: 0 };
+  // Display weights are presentation-only (Self 30 / Peer 30 / Manager 40).
+  // Backend calculations still use template.weights from the database.
+  const weights = { self: 30, peer: 30, manager: 40 };
 
   // ── Loading ──────────────────────────────────────────────────────────
   if (loading) {

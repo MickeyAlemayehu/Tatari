@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ArrowLeft,
@@ -8,27 +8,40 @@ import {
   Info,
   FileText,
   Loader2,
+  Plus,
+  X,
 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { Badge } from "../components/Badge";
 import {
   performanceService,
   type EvaluationTemplateRecord,
+  type SelfWarning,
 } from "../../services/performance.service";
 import { ApiError } from "../../lib/api";
+
+type EvalType = "self" | "peer" | "manager";
+
+interface TemplateAttachment {
+  templateId: number | null;
+}
 
 export function CreateEvaluationPeriod() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showSuccess, setShowSuccess]   = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [selfWarnings, setSelfWarnings] = useState<SelfWarning[]>([]);
 
   // Form fields
-  const [name, setName]           = useState("");
+  const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate]     = useState("");
-  const [templateId, setTemplateId] = useState<number | "">("");
+  const [endDate, setEndDate] = useState("");
+  const [attachments, setAttachments] = useState<TemplateAttachment[]>([
+    { templateId: null },
+  ]);
 
   // Template data
-  const [templates, setTemplates]       = useState<EvaluationTemplateRecord[]>([]);
+  const [templates, setTemplates] = useState<EvaluationTemplateRecord[]>([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
 
   // Validation errors
@@ -38,7 +51,6 @@ export function CreateEvaluationPeriod() {
     endDate: "",
   });
 
-  // Load active templates on mount
   useEffect(() => {
     performanceService
       .templates()
@@ -47,7 +59,11 @@ export function CreateEvaluationPeriod() {
       .finally(() => setTemplatesLoading(false));
   }, []);
 
-  const selectedTemplate = templates.find((t) => t.id === templateId) ?? null;
+  const templateById = useMemo(() => {
+    const map = new Map<number, EvaluationTemplateRecord>();
+    templates.forEach((t) => map.set(t.id, t));
+    return map;
+  }, [templates]);
 
   const validateForm = () => {
     const newErrors = { name: "", startDate: "", endDate: "" };
@@ -60,12 +76,10 @@ export function CreateEvaluationPeriod() {
       newErrors.name = "Name must be at least 3 characters";
       isValid = false;
     }
-
     if (!startDate) {
       newErrors.startDate = "Start date is required";
       isValid = false;
     }
-
     if (!endDate) {
       newErrors.endDate = "End date is required";
       isValid = false;
@@ -83,16 +97,33 @@ export function CreateEvaluationPeriod() {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
+    setSelfWarnings([]);
+
+    const templateRows = attachments
+      .filter((a) => a.templateId !== null)
+      .map((a) => {
+        const t = templateById.get(a.templateId as number)!;
+        return {
+          template_id: t.id,
+          evaluation_type: (t.evaluationType ?? t.evaluation_type ?? "self") as EvalType,
+          department_id: t.departmentId ?? t.department_id ?? null,
+        };
+      });
+
     try {
-      await performanceService.createPeriod({
+      const res = await performanceService.createPeriod({
         name: name.trim(),
         start_date: startDate,
-        end_date:   endDate,
-        status:     "active",
-        ...(templateId !== "" ? { template_id: templateId as number } : {}),
+        end_date: endDate,
+        status: "active",
+        ...(templateRows.length > 0 ? { template_ids: templateRows } : {}),
       });
+
+      setSelfWarnings(res.selfWarnings ?? []);
       setShowSuccess(true);
-      setTimeout(() => navigate("/performance"), 1500);
+      if (!res.selfWarnings || res.selfWarnings.length === 0) {
+        setTimeout(() => navigate("/performance"), 1500);
+      }
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
@@ -105,17 +136,29 @@ export function CreateEvaluationPeriod() {
 
   const handleFieldChange = (field: string, value: string) => {
     if (errors[field as keyof typeof errors]) setErrors({ ...errors, [field]: "" });
-    if (field === "name")      setName(value);
+    if (field === "name") setName(value);
     if (field === "startDate") setStartDate(value);
-    if (field === "endDate")   setEndDate(value);
+    if (field === "endDate") setEndDate(value);
   };
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return "";
     return new Date(dateStr).toLocaleDateString("en-US", {
-      month: "long", day: "numeric", year: "numeric",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
     });
   };
+
+  const addAttachment = () =>
+    setAttachments((prev) => [...prev, { templateId: null }]);
+  const removeAttachment = (idx: number) =>
+    setAttachments((prev) => prev.filter((_, i) => i !== idx));
+  const updateAttachment = (idx: number, templateId: number | null) =>
+    setAttachments((prev) => prev.map((a, i) => (i === idx ? { templateId } : a)));
+
+  const badgeVariant = (et: EvalType): "info" | "success" | "default" =>
+    et === "self" ? "info" : et === "peer" ? "success" : "default";
 
   return (
     <AppLayout>
@@ -136,19 +179,57 @@ export function CreateEvaluationPeriod() {
           </div>
         </header>
 
-        {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-3xl mx-auto">
-            {/* Success */}
             {showSuccess && (
               <div className="mb-6 p-4 bg-[#DCFCE7] border border-green-200 rounded-lg flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-[#22C55E] mt-0.5 flex-shrink-0" />
                 <div>
                   <h3 className="text-sm text-[#22C55E] mb-1">Success!</h3>
                   <p className="text-sm text-[#22C55E]">
-                    Evaluation period has been created successfully. Redirecting...
+                    Evaluation period created.{" "}
+                    {selfWarnings.length === 0
+                      ? "Redirecting…"
+                      : "Review warnings below before continuing."}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {selfWarnings.length > 0 && (
+              <div className="mb-6 p-4 bg-[#FFFBEB] border border-amber-200 rounded-lg">
+                <div className="flex items-start gap-2 mb-2">
+                  <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                  <div>
+                    <h3 className="text-sm text-amber-700 mb-1">
+                      {selfWarnings.length} employee
+                      {selfWarnings.length !== 1 ? "s" : ""} could not be matched
+                      to a self-evaluation template
+                    </h3>
+                    <p className="text-xs text-amber-700">
+                      They were skipped during auto-assignment. Add a matching
+                      self template in the Evaluation Builder and re-activate the
+                      period to retry.
+                    </p>
+                  </div>
+                </div>
+                <ul className="ml-7 mt-2 text-xs text-amber-700 list-disc">
+                  {selfWarnings.slice(0, 10).map((w) => (
+                    <li key={w.employee_id}>
+                      {w.employee_name ?? `Employee #${w.employee_id}`}
+                    </li>
+                  ))}
+                  {selfWarnings.length > 10 && (
+                    <li>…and {selfWarnings.length - 10} more.</li>
+                  )}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => navigate("/performance")}
+                  className="mt-3 text-sm text-amber-700 underline"
+                >
+                  Continue to Performance dashboard
+                </button>
               </div>
             )}
 
@@ -158,7 +239,6 @@ export function CreateEvaluationPeriod() {
                 <h2 className="text-sm text-[#111827] mb-4">Basic Information</h2>
 
                 <div className="space-y-4">
-                  {/* Name */}
                   <div>
                     <label htmlFor="name" className="block text-sm text-[#111827] mb-2">
                       Period Name <span className="text-red-500">*</span>
@@ -183,7 +263,6 @@ export function CreateEvaluationPeriod() {
                     )}
                   </div>
 
-                  {/* Date Range */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label htmlFor="startDate" className="block text-sm text-[#111827] mb-2">
@@ -232,7 +311,6 @@ export function CreateEvaluationPeriod() {
                     </div>
                   </div>
 
-                  {/* Duration display */}
                   {startDate && endDate && new Date(endDate) > new Date(startDate) && (
                     <div className="p-3 bg-[#ECFEFF] border border-[#06B6D4]/20 rounded-lg flex items-center gap-2 text-sm text-[#06B6D4]">
                       <Info className="w-4 h-4 flex-shrink-0" />
@@ -244,15 +322,26 @@ export function CreateEvaluationPeriod() {
                 </div>
               </div>
 
-              {/* Evaluation Template */}
+              {/* Templates */}
               <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
-                <div className="flex items-center gap-2 mb-1">
-                  <FileText className="w-4 h-4 text-[#4F46E5]" />
-                  <h2 className="text-sm text-[#111827]">Evaluation Template</h2>
-                  <span className="text-xs text-[#6B7280]">(Optional)</span>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-[#4F46E5]" />
+                    <h2 className="text-sm text-[#111827]">Attached Templates</h2>
+                    <span className="text-xs text-[#6B7280]">(Optional)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addAttachment}
+                    className="flex items-center gap-1 text-sm text-[#4F46E5] hover:underline"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add template
+                  </button>
                 </div>
                 <p className="text-xs text-[#6B7280] mb-4">
-                  Link an active template to define the questions employees will answer during this period.
+                  Attach one self/peer/manager template per evaluation type and department.
+                  Self templates drive auto-assignment when the period activates.
                 </p>
 
                 {templatesLoading ? (
@@ -273,50 +362,57 @@ export function CreateEvaluationPeriod() {
                     .
                   </div>
                 ) : (
-                  <>
-                    <select
-                      id="template"
-                      value={templateId}
-                      onChange={(e) =>
-                        setTemplateId(e.target.value === "" ? "" : Number(e.target.value))
-                      }
-                      className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition"
-                    >
-                      <option value="">— No template (use default questions) —</option>
-                      {templates.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.title} ({t.questionCount ?? 0} questions)
-                        </option>
-                      ))}
-                    </select>
-
-                    {/* Show selected template weights */}
-                    {selectedTemplate?.weights && (
-                      <div className="mt-4 grid grid-cols-3 gap-3">
-                        {(["self", "peer", "manager"] as const).map((role) => (
-                          <div
-                            key={role}
-                            className="border border-[#E5E7EB] rounded-lg p-3 text-center"
+                  <div className="space-y-2">
+                    {attachments.map((a, idx) => {
+                      const tpl = a.templateId ? templateById.get(a.templateId) : null;
+                      const et =
+                        (tpl?.evaluationType ?? tpl?.evaluation_type ?? "self") as EvalType;
+                      return (
+                        <div
+                          key={idx}
+                          className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2 items-center"
+                        >
+                          <select
+                            value={a.templateId ?? ""}
+                            onChange={(e) =>
+                              updateAttachment(
+                                idx,
+                                e.target.value === "" ? null : Number(e.target.value)
+                              )
+                            }
+                            className="px-3 py-2 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
                           >
-                            <p className="text-xs text-[#6B7280] capitalize mb-1">{role}</p>
-                            <p className="text-lg text-[#111827]">
-                              {selectedTemplate.weights![role] ?? 0}%
-                            </p>
-                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
-                              <div
-                                className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] h-1.5 rounded-full"
-                                style={{ width: `${selectedTemplate.weights![role] ?? 0}%` }}
-                              />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </>
+                            <option value="">— Pick template —</option>
+                            {templates.map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.title} ({t.evaluationType ?? t.evaluation_type})
+                              </option>
+                            ))}
+                          </select>
+                          {tpl && (
+                            <Badge variant={badgeVariant(et)} size="sm">
+                              {et}
+                            </Badge>
+                          )}
+                          {tpl && (
+                            <span className="text-xs text-[#6B7280]">
+                              {tpl.department?.name ?? "Default"}
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment(idx)}
+                            className="p-2 text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
 
-              {/* Actions */}
               <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
                 <div className="flex items-center justify-end gap-3">
                   <button
@@ -345,8 +441,9 @@ export function CreateEvaluationPeriod() {
 
             <div className="mt-6 p-4 bg-[#ECFEFF] border border-[#06B6D4]/20 rounded-lg">
               <p className="text-sm text-[#06B6D4]">
-                <strong>Tip:</strong> Linking a template lets employees answer structured questions
-                during their evaluations. Periods without a template fall back to default questions.
+                <strong>Tip:</strong> Activating the period auto-assigns self
+                evaluations using the attached self templates. Peer and manager
+                evaluators are set per-employee on the Assign Evaluators page.
               </p>
             </div>
           </div>
