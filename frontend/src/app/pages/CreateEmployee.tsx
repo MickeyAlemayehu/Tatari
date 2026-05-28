@@ -100,7 +100,7 @@ export function CreateEmployee() {
         first_name,
         last_name,
         email: email.trim(),
-        password: "Password123!",
+        password: "defaultpassword123",
         position: role.trim(),
         permission_level: 1,
         status: status === "inactive" ? "inactive" : "active",
@@ -332,7 +332,11 @@ export function CreateEmployee() {
             <div className="mt-6 p-4 bg-[#ECFEFF] border border-[#06B6D4]/20 rounded-lg">
               <p className="text-sm text-[#06B6D4]">
                 <strong>Note:</strong> Fields marked with <span className="text-red-500">*</span>{" "}
-                are required. Make sure all required information is provided before submitting.
+                are required. New employees are created with a default password of{" "}
+                <code className="px-1.5 py-0.5 bg-white rounded border border-[#06B6D4]/30 text-[#111827]">
+                  defaultpassword123
+                </code>
+                {" "}— share it with the employee and ask them to change it after first sign-in.
               </p>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
   ArrowLeft,
@@ -9,11 +9,16 @@ import {
   AlertCircle,
   X,
   FileText,
-  Users,
   AlertTriangle,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { employeesService } from "../../services/employees.service";
+import { departmentsService, type DepartmentRecord } from "../../services/departments.service";
+import { ApiError } from "../../lib/api";
+import { splitFullName } from "../../lib/utils";
+
+const DEFAULT_PASSWORD = "defaultpassword123";
 
 interface ImportResult {
   row: number;
@@ -25,6 +30,76 @@ interface ImportResult {
   errorMessage?: string;
 }
 
+interface ParsedRow {
+  fullName: string;
+  email: string;
+  department: string;
+  role: string;
+  status: string;
+}
+
+function parseCsv(text: string): string[][] {
+  const trimmed = text.replace(/^﻿/, "");
+  const rows: string[][] = [];
+  let field = "";
+  let row: string[] = [];
+  let inQuotes = false;
+
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i];
+
+    if (inQuotes) {
+      if (ch === '"' && trimmed[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        field += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      row.push(field);
+      field = "";
+      if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+      row = [];
+      if (ch === "\r" && trimmed[i + 1] === "\n") i++;
+    } else {
+      field += ch;
+    }
+  }
+
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    if (row.some((cell) => cell.trim() !== "")) rows.push(row);
+  }
+
+  return rows;
+}
+
+function mapRow(rawRow: string[], headerIndex: Record<string, number>): ParsedRow {
+  const pick = (key: string) => {
+    const idx = headerIndex[key];
+    if (idx === undefined) return "";
+    return (rawRow[idx] ?? "").trim();
+  };
+
+  return {
+    fullName: pick("full name"),
+    email: pick("email"),
+    department: pick("department"),
+    role: pick("role"),
+    status: pick("status"),
+  };
+}
+
 export function BulkImport() {
   const navigate = useNavigate();
   const [isDragging, setIsDragging] = useState(false);
@@ -32,6 +107,12 @@ export function BulkImport() {
   const [isImporting, setIsImporting] = useState(false);
   const [importComplete, setImportComplete] = useState(false);
   const [importResults, setImportResults] = useState<ImportResult[]>([]);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [departments, setDepartments] = useState<DepartmentRecord[]>([]);
+
+  useEffect(() => {
+    departmentsService.list().then((res) => setDepartments(res.data)).catch(() => {});
+  }, []);
 
   // Handle drag events
   const handleDragOver = (e: React.DragEvent) => {
@@ -53,8 +134,9 @@ export function BulkImport() {
       setFile(droppedFile);
       setImportComplete(false);
       setImportResults([]);
+      setImportError(null);
     } else {
-      alert("Please upload a valid CSV or Excel file (.csv, .xlsx, .xls)");
+      setImportError("Please upload a valid CSV file (.csv).");
     }
   };
 
@@ -64,28 +146,27 @@ export function BulkImport() {
       setFile(selectedFile);
       setImportComplete(false);
       setImportResults([]);
+      setImportError(null);
     } else {
-      alert("Please upload a valid CSV or Excel file (.csv, .xlsx, .xls)");
+      setImportError("Please upload a valid CSV file (.csv).");
     }
   };
 
   const isValidFileType = (file: File) => {
-    const validTypes = [
-      "text/csv",
-      "application/vnd.ms-excel",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    ];
-    return validTypes.includes(file.type) || file.name.endsWith(".csv");
+    return (
+      file.type === "text/csv" ||
+      file.name.toLowerCase().endsWith(".csv")
+    );
   };
 
   const handleRemoveFile = () => {
     setFile(null);
     setImportComplete(false);
     setImportResults([]);
+    setImportError(null);
   };
 
   const handleDownloadTemplate = () => {
-    // Create CSV template
     const headers = ["Full Name", "Email", "Department", "Role", "Status"];
     const sampleData = [
       ["John Doe", "john.doe@company.com", "Engineering", "Software Developer", "active"],
@@ -111,84 +192,120 @@ export function BulkImport() {
     if (!file) return;
 
     setIsImporting(true);
+    setImportError(null);
+    setImportResults([]);
 
-    // Simulate file processing and import
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
 
-    // Mock import results
-    const mockResults: ImportResult[] = [
-      {
-        row: 2,
-        name: "John Doe",
-        email: "john.doe@company.com",
-        department: "Engineering",
-        role: "Software Developer",
-        status: "success",
-      },
-      {
-        row: 3,
-        name: "Jane Smith",
-        email: "jane.smith@company.com",
-        department: "Marketing",
-        role: "Marketing Manager",
-        status: "success",
-      },
-      {
-        row: 4,
-        name: "Bob Johnson",
-        email: "invalid-email",
-        department: "Sales",
-        role: "Sales Representative",
-        status: "error",
-        errorMessage: "Invalid email format",
-      },
-      {
-        row: 5,
-        name: "Alice Williams",
-        email: "alice.williams@company.com",
-        department: "Engineering",
-        role: "Senior Developer",
-        status: "success",
-      },
-      {
-        row: 6,
-        name: "",
-        email: "sarah.jones@company.com",
-        department: "Design",
-        role: "UX Designer",
-        status: "error",
-        errorMessage: "Full name is required",
-      },
-      {
-        row: 7,
-        name: "Michael Brown",
-        email: "michael.brown@company.com",
-        department: "Product",
-        role: "Product Manager",
-        status: "success",
-      },
-      {
-        row: 8,
-        name: "Emily Davis",
-        email: "emily.davis@company.com",
-        department: "InvalidDept",
-        role: "Analyst",
-        status: "error",
-        errorMessage: "Invalid department",
-      },
-      {
-        row: 9,
-        name: "David Wilson",
-        email: "david.wilson@company.com",
-        department: "Finance",
-        role: "Financial Analyst",
-        status: "success",
-      },
-    ];
+      if (rows.length < 2) {
+        setImportError("CSV must contain a header row and at least one data row.");
+        setIsImporting(false);
+        return;
+      }
 
-    setImportResults(mockResults);
-    setIsImporting(false);
-    setImportComplete(true);
+      const headers = rows[0]!.map((h) => h.trim().toLowerCase());
+      const headerIndex: Record<string, number> = {};
+      headers.forEach((h, i) => {
+        headerIndex[h] = i;
+      });
+
+      const required = ["full name", "email", "department", "role"];
+      const missing = required.filter((h) => !(h in headerIndex));
+      if (missing.length > 0) {
+        setImportError(
+          `Missing required column(s): ${missing.map((m) => `"${m}"`).join(", ")}.`
+        );
+        setIsImporting(false);
+        return;
+      }
+
+      const deptByName = new Map<string, DepartmentRecord>();
+      departments.forEach((d) => deptByName.set(d.name.toLowerCase(), d));
+
+      const results: ImportResult[] = [];
+
+      for (let i = 1; i < rows.length; i++) {
+        const rowNumber = i + 1;
+        const parsed = mapRow(rows[i]!, headerIndex);
+
+        const base: ImportResult = {
+          row: rowNumber,
+          name: parsed.fullName,
+          email: parsed.email,
+          department: parsed.department,
+          role: parsed.role,
+          status: "success",
+        };
+
+        if (!parsed.fullName) {
+          results.push({ ...base, status: "error", errorMessage: "Full name is required" });
+          continue;
+        }
+        if (!parsed.email) {
+          results.push({ ...base, status: "error", errorMessage: "Email is required" });
+          continue;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(parsed.email)) {
+          results.push({ ...base, status: "error", errorMessage: "Invalid email format" });
+          continue;
+        }
+        if (!parsed.role) {
+          results.push({ ...base, status: "error", errorMessage: "Role is required" });
+          continue;
+        }
+
+        const dept = parsed.department
+          ? deptByName.get(parsed.department.toLowerCase())
+          : undefined;
+        if (parsed.department && !dept) {
+          results.push({
+            ...base,
+            status: "error",
+            errorMessage: `Unknown department "${parsed.department}"`,
+          });
+          continue;
+        }
+
+        const statusValue =
+          parsed.status.toLowerCase() === "inactive" ? "inactive" : "active";
+
+        try {
+          const { first_name, last_name } = splitFullName(parsed.fullName);
+          const payload: Parameters<typeof employeesService.create>[0] = {
+            first_name,
+            last_name,
+            email: parsed.email,
+            password: DEFAULT_PASSWORD,
+            position: parsed.role,
+            permission_level: 1,
+            status: statusValue,
+          };
+          if (dept) payload.department_id = dept.id;
+
+          await employeesService.create(payload);
+          results.push(base);
+        } catch (err) {
+          let message = "Failed to create employee";
+          if (err instanceof ApiError) {
+            if (err.errors) {
+              message = Object.values(err.errors).flat().join(" ") || err.message;
+            } else {
+              message = err.message;
+            }
+          }
+          results.push({ ...base, status: "error", errorMessage: message });
+        }
+      }
+
+      setImportResults(results);
+      setImportComplete(true);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Failed to read or import file.");
+    } finally {
+      setIsImporting(false);
+    }
   };
 
   const successCount = importResults.filter((r) => r.status === "success").length;
@@ -220,7 +337,7 @@ export function BulkImport() {
               <div>
                 <h1 className="text-xl text-[#111827]">Bulk Import Employees</h1>
                 <p className="text-sm text-[#6B7280]">
-                  Upload a CSV or Excel file to import multiple employees
+                  Upload a CSV file to import multiple employees
                 </p>
               </div>
             </div>
@@ -242,6 +359,13 @@ export function BulkImport() {
             <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
               <h3 className="text-[#111827] mb-4">Upload File</h3>
 
+              {importError && (
+                <div className="mb-4 p-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg text-sm text-[#EF4444] flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <span>{importError}</span>
+                </div>
+              )}
+
               {!file ? (
                 <div
                   onDragOver={handleDragOver}
@@ -256,7 +380,7 @@ export function BulkImport() {
                   <input
                     type="file"
                     id="file-upload"
-                    accept=".csv,.xlsx,.xls"
+                    accept=".csv,text/csv"
                     onChange={handleFileSelect}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
@@ -271,7 +395,7 @@ export function BulkImport() {
                       or click to browse from your computer
                     </p>
                     <p className="text-xs text-[#6B7280]">
-                      Supported formats: CSV, XLSX, XLS (Max 10MB)
+                      Supported format: CSV (Max 10MB)
                     </p>
                   </div>
                 </div>
@@ -289,7 +413,8 @@ export function BulkImport() {
                     </div>
                     <button
                       onClick={handleRemoveFile}
-                      className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
+                      disabled={isImporting}
+                      className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition disabled:opacity-50"
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -321,12 +446,17 @@ export function BulkImport() {
                     <h4 className="text-sm text-[#06B6D4] mb-2">Import Instructions</h4>
                     <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
                       <li>Download the template file to see the required format</li>
-                      <li>Fill in employee details: Full Name, Email, Department, Role, Status</li>
-                      <li>Ensure all required fields are populated</li>
-                      <li>Valid departments: Engineering, Product, Design, HR, Marketing, Sales, Finance</li>
-                      <li>Valid statuses: active, on-leave, inactive</li>
-                      <li>Save your file as CSV or Excel format</li>
-                      <li>Upload the file and click "Import Employees"</li>
+                      <li>Required columns: Full Name, Email, Department, Role. Status is optional (defaults to active).</li>
+                      <li>Department must match an existing department name exactly (case-insensitive).</li>
+                      <li>Valid statuses: <code>active</code>, <code>inactive</code>.</li>
+                      <li>
+                        Imported employees are created with the default password{" "}
+                        <code className="px-1 bg-white rounded border border-[#06B6D4]/30 text-[#111827]">
+                          {DEFAULT_PASSWORD}
+                        </code>
+                        . Ask them to change it on first sign-in.
+                      </li>
+                      <li>Save your file as CSV format and upload it above.</li>
                     </ul>
                   </div>
                 </div>
@@ -427,7 +557,7 @@ export function BulkImport() {
                               {result.email}
                             </td>
                             <td className="px-6 py-4 text-sm text-[#6B7280]">
-                              {result.department}
+                              {result.department || "-"}
                             </td>
                             <td className="px-6 py-4 text-sm text-[#6B7280]">
                               {result.role}
@@ -466,6 +596,7 @@ export function BulkImport() {
                         setFile(null);
                         setImportComplete(false);
                         setImportResults([]);
+                        setImportError(null);
                       }}
                       className="px-4 py-2 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition"
                     >

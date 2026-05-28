@@ -85,6 +85,8 @@ Route::middleware('auth:api')->group(function () {
     Route::middleware('employee.permission:manage_employees')->group(function () {
         Route::get('/employees', [EmployeeController::class, 'index']);
         Route::post('/employees', [EmployeeController::class, 'store']);
+        Route::get('/employees/import/template', [EmployeeController::class, 'importTemplate']);
+        Route::post('/employees/import', [EmployeeController::class, 'import']);
         Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
         Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
         Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
