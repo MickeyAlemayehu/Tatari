@@ -7,6 +7,10 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Events\LeaveRequestSubmitted;
+use App\Events\LeaveRequestApproved;
+use App\Events\LeaveRequestRejected;
+use App\Events\LeaveRequestCancelled;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -99,6 +103,8 @@ class LeaveManagementController extends Controller
 
         $balance->increment('pending_days', $days);
 
+        event(new LeaveRequestSubmitted($leaveRequest));
+
         return response()->json(
             $this->leaveRequestPayload($leaveRequest->load(['employee.department', 'leaveType', 'approver'])),
             Response::HTTP_CREATED
@@ -139,6 +145,8 @@ class LeaveManagementController extends Controller
             'used_days' => $balance->used_days + $days,
         ]);
 
+        event(new LeaveRequestApproved($leaveRequest->fresh(), $approver));
+
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }
 
@@ -166,6 +174,8 @@ class LeaveManagementController extends Controller
 
         $balance->update(['pending_days' => max(0, $balance->pending_days - $days)]);
 
+        event(new LeaveRequestRejected($leaveRequest->fresh(), $approver, $data['rejection_reason'] ?? $data['reason'] ?? null));
+
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }
 
@@ -186,6 +196,8 @@ class LeaveManagementController extends Controller
 
         $leaveRequest->update(['status' => 'cancelled']);
         $balance->update(['pending_days' => max(0, $balance->pending_days - $days)]);
+
+        event(new LeaveRequestCancelled($leaveRequest->fresh()));
 
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }

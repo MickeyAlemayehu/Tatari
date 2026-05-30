@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Toaster } from "sonner";
 import { AppSidebar } from "./AppSidebar";
 import { AppHeader } from "./AppHeader";
 import { X } from "lucide-react";
@@ -22,6 +23,7 @@ export function AppLayout({
 
   return (
     <div className="flex h-screen bg-[#F9FAFB] overflow-hidden">
+      <Toaster richColors position="top-right" closeButton />
       {/* Desktop Sidebar - Fixed Position */}
       <AppSidebar />
 

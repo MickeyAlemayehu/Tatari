@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Employee;
 use App\Support\EmployeePermissions;
+use App\Events\EmployeePasswordChanged;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -105,6 +106,8 @@ class ApiAuthController extends Controller
         $employee->password = $data['new_password'];
         $employee->must_change_password = false;
         $employee->save();
+
+        event(new EmployeePasswordChanged($employee));
 
         return response()->json(['message' => 'Password updated successfully.']);
     }

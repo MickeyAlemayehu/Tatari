@@ -8,6 +8,7 @@ import {
 import { AsyncState } from "../components/AsyncState";
 import { ApiError } from "../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
+import { useActionSound } from "../hooks/useActionSound";
 import {
   ArrowLeft,
   Mail,
@@ -131,6 +132,7 @@ export function ApplicantProfile() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { hasPermission } = useAuth();
+  const { playSendSound } = useActionSound();
   const canManage = hasPermission("manage_employees");
 
   const [loading, setLoading] = useState(true);
@@ -191,6 +193,7 @@ export function ApplicantProfile() {
     try {
       const updated = await applicantsService.update(Number(id), { status });
       setApplicant(mapApplicant(updated));
+      playSendSound();
       flashSuccess(successMsg);
     } catch (err) {
       setActionError(friendlyError(err, "Failed to update status."));
@@ -223,6 +226,7 @@ export function ApplicantProfile() {
       setInterviewDate("");
       setInterviewTime("");
       setInterviewType("video");
+      playSendSound();
       flashSuccess("Interview scheduled.");
     } catch (err) {
       setActionError(friendlyError(err, "Failed to schedule interview."));

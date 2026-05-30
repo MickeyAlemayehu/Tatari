@@ -12,6 +12,9 @@ use App\Models\EvaluationTemplate;
 use App\Models\PerformanceEvaluation;
 use App\Models\PerformanceSummary;
 use App\Services\SelfEvaluationAutoAssigner;
+use App\Events\EvaluatorsAssigned;
+use App\Events\EvaluationSubmitted;
+use App\Events\EvaluationPeriodActivated;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -85,8 +88,13 @@ class PerformanceEvaluationWorkflowController extends Controller
 
     public function activatePeriod(EvaluationPeriod $period, SelfEvaluationAutoAssigner $autoAssigner): JsonResponse
     {
+        $wasActive = $period->status === 'active';
         $period->update(['status' => 'active']);
         $warnings = $autoAssigner->assignFor($period);
+
+        if (! $wasActive) {
+            event(new EvaluationPeriodActivated($period->fresh()));
+        }
 
         $period->load(['templates.department'])->loadCount(['assignments', 'evaluations']);
         $payload = $this->periodPayload($period);
@@ -218,6 +226,10 @@ class PerformanceEvaluationWorkflowController extends Controller
 
             return $rows;
         });
+
+        if ($created->isNotEmpty()) {
+            event(new EvaluatorsAssigned($created->all()));
+        }
 
         return response()->json([
             'message' => 'Evaluators assigned.',
@@ -360,6 +372,8 @@ class PerformanceEvaluationWorkflowController extends Controller
         }
 
         $this->recalculateSummary($assignment->employee_id, $assignment->evaluation_period_id);
+
+        event(new EvaluationSubmitted($evaluation->fresh()));
 
         return response()->json($this->evaluationPayload($evaluation->load(['assignment', 'employee.department', 'evaluator'])), Response::HTTP_CREATED);
     }

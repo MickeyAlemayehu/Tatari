@@ -7,8 +7,13 @@ export interface NotificationRecord {
   message: string;
   type: string;
   category: string;
+  notification_type?: string;
   timestamp?: string;
+  created_at?: string;
   read: boolean;
+  is_read?: boolean;
+  reference_type?: string | null;
+  reference_id?: number | null;
 }
 
 export const notificationsService = {

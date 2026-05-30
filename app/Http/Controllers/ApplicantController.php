@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Mail\ApplicantStatusUpdated;
 use App\Models\Applicant;
 use App\Models\JobVacancy;
+use App\Events\ApplicantStatusChanged;
+use App\Events\InterviewScheduled;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -110,6 +112,19 @@ class ApplicantController extends Controller
             && in_array($data['status'], ['hired', 'rejected', 'shortlisted', 'interview_scheduled'], true)
         ) {
             $this->sendStatusNotification($applicant->fresh()->load('vacancy'), $data['status']);
+        }
+
+        if (array_key_exists('status', $data) && $data['status'] !== $previousStatus) {
+            event(new ApplicantStatusChanged(
+                $applicant->fresh(),
+                $previousStatus,
+                $data['status'],
+                $reviewer?->id
+            ));
+
+            if ($data['status'] === 'interview_scheduled') {
+                event(new InterviewScheduled($applicant->fresh()));
+            }
         }
 
         return response()->json($this->payload($applicant->fresh()->load(['vacancy.department', 'reviewer']), true));

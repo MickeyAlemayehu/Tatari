@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Employee;
+use App\Events\EmployeeCreated;
+use App\Events\EmployeeDeactivated;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,6 +40,8 @@ class EmployeeController extends Controller
         $data['must_change_password'] = true;
 
         $employee = Employee::create($data);
+
+        event(new EmployeeCreated($employee));
 
         return response()->json(
             $employee->load('department:id,name', 'manager:id,first_name,last_name'),
@@ -81,6 +85,8 @@ class EmployeeController extends Controller
     public function deactivate(Employee $employee): JsonResponse
     {
         $employee->update(['status' => 'inactive']);
+
+        event(new EmployeeDeactivated($employee->fresh()));
 
         return response()->json(['message' => 'Employee deactivated.']);
     }

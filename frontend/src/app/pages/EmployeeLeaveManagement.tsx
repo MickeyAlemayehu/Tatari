@@ -14,6 +14,7 @@ import { AppLayout } from "../components/AppLayout";
 import { leaveService, type LeaveBalanceRecord, type LeaveRequestRecord } from "../../services/leave.service";
 import { balanceColor } from "../../lib/utils";
 import { ApiError } from "../../lib/api";
+import { useActionSound } from "../hooks/useActionSound";
 
 type TabType = "requests" | "new-request" | "balance";
 
@@ -324,6 +325,7 @@ function RequestLeaveTab({
 }: {
   onSuccess: (request: LeaveRequest) => void;
 }) {
+  const { playSendSound } = useActionSound();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [leaveType, setLeaveType] = useState("");
@@ -402,6 +404,7 @@ function RequestLeaveTab({
         reason,
       });
       const newRequest = mapRequest(created);
+      playSendSound();
       setShowSuccess(true);
       setTimeout(() => onSuccess(newRequest), 1500);
     } catch (err) {

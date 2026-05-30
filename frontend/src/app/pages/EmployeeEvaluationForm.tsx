@@ -22,6 +22,7 @@ import {
 import { ApiError } from "../../lib/api";
 import { buildEvaluationPayload } from "../../lib/evaluation-submit";
 import { findAssignment } from "../../lib/evaluation-helpers";
+import { useActionSound } from "../hooks/useActionSound";
 
 interface Answer {
   questionId: number;
@@ -55,6 +56,7 @@ const FALLBACK_QUESTIONS: Record<string, EvaluationQuestionRecord[]> = {
 export function EmployeeEvaluationForm() {
   const navigate = useNavigate();
   const { type, id } = useParams();
+  const { playSendSound } = useActionSound();
 
   const [isSubmitting, setIsSubmitting]   = useState(false);
   const [showSuccess, setShowSuccess]     = useState(false);
@@ -207,6 +209,7 @@ export function EmployeeEvaluationForm() {
         ...(payload.score    !== undefined ? { score: payload.score }       : {}),
         ...(payload.comments !== undefined ? { comments: payload.comments } : {}),
       });
+      playSendSound();
       setShowSuccess(true);
       setTimeout(() => navigate("/employee/performance?tab=tasks"), 1500);
     } catch (err) {

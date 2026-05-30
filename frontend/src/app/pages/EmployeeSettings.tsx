@@ -1,8 +1,10 @@
 import { useState } from "react";
-import { Lock, Bell, Palette, Globe, Shield, Mail, Save } from "lucide-react";
+import { Lock, Bell, Palette, Globe, Shield, Mail, Save, Volume2 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
+import { isSoundEnabled, setSoundEnabled } from "../hooks/sound";
 
 export function EmployeeSettings() {
+  const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
   const [settings, setSettings] = useState({
     emailNotifications: true,
     leaveApprovalNotifications: true,
@@ -127,6 +129,31 @@ export function EmployeeSettings() {
                       onChange={(e) =>
                         setSettings({ ...settings, payslipNotifications: e.target.checked })
                       }
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-[#E5E7EB] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#4F46E5] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#E5E7EB] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4F46E5]"></div>
+                  </label>
+                </div>
+
+                {/* Sound Effects */}
+                <div className="flex items-center justify-between p-4 bg-[#F9FAFB] rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <Volume2 className="w-4 h-4 text-[#4F46E5] mt-0.5" />
+                    <div>
+                      <h4 className="text-sm text-[#111827] mb-1">Notification Sounds</h4>
+                      <p className="text-xs text-[#6B7280]">
+                        Play a short chime when sending or receiving notifications
+                      </p>
+                    </div>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={soundOn}
+                      onChange={(e) => {
+                        setSoundOn(e.target.checked);
+                        setSoundEnabled(e.target.checked);
+                      }}
                       className="sr-only peer"
                     />
                     <div className="w-11 h-6 bg-[#E5E7EB] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#4F46E5] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#E5E7EB] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4F46E5]"></div>
