@@ -1,6 +1,7 @@
 import { createBrowserRouter } from "react-router-dom";
 import { Navigate } from "react-router";
 import { Login } from "../app/pages/Login";
+import { ForceChangePassword } from "../app/pages/ForceChangePassword";
 import { EmployeeLogin } from "../app/pages/EmployeeLogin";
 import { HRLogin } from "../app/pages/HRLogin";
 import { AdminLogin } from "../app/pages/AdminLogin";
@@ -61,6 +62,7 @@ import { admin, authenticated, employee, hr, permitted } from "./guards";
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/login" replace /> },
   { path: "/login", element: <Login /> },
+  { path: "/change-password", element: <ForceChangePassword /> },
   { path: "/select-role", element: <Navigate to="/login" replace /> },
   { path: "/employee/login", element: <EmployeeLogin /> },
   { path: "/hr/login", element: <HRLogin /> },

@@ -20,6 +20,7 @@ export interface Employee {
     id: number;
     name: string;
   } | null;
+  must_change_password?: boolean;
 }
 
 export interface LoginResponse {

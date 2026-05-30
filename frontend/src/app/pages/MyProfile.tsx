@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { User, Mail, Briefcase, Save, Edit2, Lock, CheckCircle } from "lucide-react";
+import { User, Mail, Briefcase, Save, Edit2, Lock, CheckCircle, AlertCircle } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 import { useAuth } from "../../contexts/AuthContext";
 import { employeesService } from "../../services/employees.service";
@@ -121,6 +121,12 @@ export function MyProfile() {
           {error && (
             <div className="mb-4 rounded-lg border border-[#EF4444]/20 bg-[#FEF2F2] px-4 py-3 text-sm text-[#EF4444]">
               {error}
+            </div>
+          )}
+          {employee.must_change_password && (
+            <div className="mb-4 rounded-lg border border-[#F59E0B]/20 bg-[#FFFBEB] px-4 py-3 text-sm text-[#D97706] font-medium flex items-center gap-2">
+              <AlertCircle className="w-5 h-5" />
+              You must change your default password to continue using the application.
             </div>
           )}
           <div className="bg-white rounded-xl border border-[#E5E7EB] mb-6">

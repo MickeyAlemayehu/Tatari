@@ -35,6 +35,7 @@ class EmployeeController extends Controller
     {
         $data = $request->validated();
         $data['permission_level'] = $data['permission_level'] ?? config('permission_levels.default_level', 1);
+        $data['must_change_password'] = true;
 
         $employee = Employee::create($data);
 
@@ -171,6 +172,7 @@ class EmployeeController extends Controller
 
                 $data = $validator->validated();
                 $data['permission_level'] = $data['permission_level'] ?? config('permission_levels.default_level', 1);
+                $data['must_change_password'] = true;
 
                 Employee::create($data);
                 $imported++;

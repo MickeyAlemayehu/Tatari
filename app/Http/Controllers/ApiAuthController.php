@@ -103,6 +103,7 @@ class ApiAuthController extends Controller
         }
 
         $employee->password = $data['new_password'];
+        $employee->must_change_password = false;
         $employee->save();
 
         return response()->json(['message' => 'Password updated successfully.']);

@@ -125,6 +125,7 @@ class EmployeePermissions
             'level_name' => self::levelName($level),
             'permission_override' => $employee->permission_override,
             'revoked_permissions' => $employee->revoked_permissions,
+            'must_change_password' => $employee->must_change_password,
             'status' => $employee->status,
             'department' => $employee->department ? [
                 'id' => $employee->department->id,
