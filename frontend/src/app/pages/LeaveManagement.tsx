@@ -19,8 +19,9 @@ import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 import { leaveService, type LeaveRequestRecord, type LeaveTypeRecord } from "../../services/leave.service";
 import { ApiError } from "../../lib/api";
+import { usePermissions } from "../../hooks/usePermissions";
 
-type TabType = "overview" | "request" | "history" | "approvals" | "calendar";
+type TabType = "request" | "history" | "approvals" | "calendar";
 
 interface LeaveBalance {
   type: string;
@@ -62,13 +63,17 @@ interface PendingLeaveRequest {
 export function LeaveManagement() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { permissionLevel } = usePermissions();
+  
   const tabParam = searchParams.get("tab") as TabType | null;
-  const [activeTab, setActiveTab] = useState<TabType>(tabParam || "overview");
+  const [activeTab, setActiveTab] = useState<TabType>(
+    (tabParam && tabParam !== "overview" as any) ? tabParam : ((permissionLevel ?? 0) >= 2 ? "request" : "history")
+  );
 
   // Update active tab when URL changes
   useEffect(() => {
     const tab = searchParams.get("tab") as TabType | null;
-    if (tab && ["overview", "request", "history", "approvals", "calendar"].includes(tab)) {
+    if (tab && ["request", "history", "approvals", "calendar"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -77,26 +82,6 @@ export function LeaveManagement() {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSearchParams({ tab });
-  };
-
-  const [totalEmployees, setTotalEmployees] = useState(0);
-  const [totalLeaveRequests, setTotalLeaveRequests] = useState(0);
-  const [pendingLeaveRequests, setPendingLeaveRequests] = useState(0);
-  const [approvedLeaveRequests, setApprovedLeaveRequests] = useState(0);
-  const [rejectedLeaveRequests, setRejectedLeaveRequests] = useState(0);
-
-  useEffect(() => {
-    void leaveService.summary().then((s) => {
-      setTotalEmployees(s.totalEmployees);
-      setTotalLeaveRequests(s.totalLeaveRequests);
-      setPendingLeaveRequests(s.pendingLeaveRequests);
-      setApprovedLeaveRequests(s.approvedLeaveRequests);
-      setRejectedLeaveRequests(s.rejectedLeaveRequests);
-    }).catch(() => {});
-  }, []);
-
-  const calculatePercentage = (used: number, total: number) => {
-    return Math.round((used / total) * 100);
   };
 
   const formatDate = (dateStr: string) => {
@@ -109,8 +94,7 @@ export function LeaveManagement() {
   };
 
   const tabs = [
-    { id: "overview" as TabType, label: "Overview", icon: TrendingUp },
-    { id: "request" as TabType, label: "Request Leave", icon: Plus },
+    ...((permissionLevel ?? 0) >= 2 ? [{ id: "request" as TabType, label: "Request Leave", icon: Plus }] : []),
     { id: "history" as TabType, label: "Leave History", icon: History },
     { id: "approvals" as TabType, label: "Approvals", icon: CheckCircle },
     { id: "calendar" as TabType, label: "Calendar", icon: CalendarRange },
@@ -128,13 +112,15 @@ export function LeaveManagement() {
                 Manage leave requests, balances, and approvals
               </p>
             </div>
-            <button
-              onClick={() => handleTabChange("request")}
-              className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
-            >
-              <Plus className="w-5 h-5" />
-              <span>New Request</span>
-            </button>
+            {(permissionLevel ?? 0) >= 2 && (
+              <button
+                onClick={() => handleTabChange("request")}
+                className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
+              >
+                <Plus className="w-5 h-5" />
+                <span>New Request</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -163,14 +149,6 @@ export function LeaveManagement() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto bg-[#F9FAFB]">
-          {activeTab === "overview" && <OverviewTab
-            totalEmployees={totalEmployees}
-            totalLeaveRequests={totalLeaveRequests}
-            pendingLeaveRequests={pendingLeaveRequests}
-            approvedLeaveRequests={approvedLeaveRequests}
-            rejectedLeaveRequests={rejectedLeaveRequests}
-            formatDate={formatDate}
-          />}
           {activeTab === "request" && <RequestLeaveTab />}
           {activeTab === "history" && <LeaveHistoryTab formatDate={formatDate} />}
           {activeTab === "approvals" && <ApprovalsTab formatDate={formatDate} />}
@@ -905,30 +883,6 @@ function LeaveHistoryTab({ formatDate }: { formatDate: (dateStr: string) => stri
                           <Eye className="w-4 h-4" />
                           View
                         </button>
-                        {request.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => {
-                                alert(`Approved leave request for ${request.employee}`);
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm text-[#22C55E] hover:bg-[#DCFCE7] rounded-lg transition"
-                              title="Approve"
-                            >
-                              <Check className="w-4 h-4" />
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => {
-                                alert(`Rejected leave request for ${request.employee}`);
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
-                              title="Reject"
-                            >
-                              <X className="w-4 h-4" />
-                              Reject
-                            </button>
-                          </>
-                        )}
                       </div>
                     </td>
                   </tr>
