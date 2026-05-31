@@ -41,10 +41,7 @@ import { PublicJobListing } from "./app/pages/PublicJobListing";
 import { PublicJobApplication } from "./app/pages/PublicJobApplication";
 
 import { Notifications } from "./app/pages/Notifications";
-import { AdminCompanyRequests } from "./app/pages/AdminCompanyRequests";
-import { CompanyDetails } from "./app/pages/CompanyDetails";
-import { RoleManagement } from "./app/pages/RoleManagement";
-import { UserManagement } from "./app/pages/UserManagement";
+import { CompanyManagement } from "./app/pages/CompanyManagement";
 import { SystemSettings } from "./app/pages/SystemSettings";
 import { AuditLogs } from "./app/pages/AuditLogs";
 import { Help } from "./app/pages/Help";
@@ -82,19 +79,7 @@ export const router = createBrowserRouter([
 },
 {
   path: "/admin/companies",
-  element: <AdminCompanyRequests />,
-},
-{
-  path: "/admin/companies/:id",
-  element: <CompanyDetails />,
-},
-{
-  path: "/admin/roles",
-  element: <RoleManagement />,
-},
-{
-  path: "/admin/users",
-  element: <UserManagement />,
+  element: <CompanyManagement />,
 },
 {
   path: "/admin/settings",
