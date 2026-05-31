@@ -10,7 +10,6 @@ import { EmployeeDashboard } from "../app/pages/EmployeeDashboard";
 import { HRDashboard } from "../app/pages/HRDashboard";
 import { MyProfile } from "../app/pages/MyProfile";
 import { MyDepartment } from "../app/pages/MyDepartment";
-import { Equipment } from "../app/pages/Equipment";
 import { EmployeeSettings } from "../app/pages/EmployeeSettings";
 import { EmployeeManagement } from "../app/pages/EmployeeManagement";
 import { EmployeeProfile } from "../app/pages/EmployeeProfile";
@@ -73,7 +72,6 @@ export const router = createBrowserRouter([
   { path: "/employee/performance", element: employee(<EmployeePerformance />) },
   { path: "/employee/evaluation/:type/:id", element: employee(<EmployeeEvaluationForm />) },
   { path: "/employee/performance/results/:id", element: employee(<PerformanceResults />) },
-  { path: "/employee/equipment", element: employee(<Equipment />) },
 
   { path: "/employee/notifications", element: employee(<Notifications />) },
   { path: "/employee/settings", element: employee(<EmployeeSettings />) },
@@ -98,6 +96,7 @@ export const router = createBrowserRouter([
   { path: "/performance/structure", element: permitted("performance_create", <EvaluationStructure />) },
   { path: "/performance/results-table", element: permitted("manage_performance_reviews", <PerformanceResultsTable />) },
   { path: "/performance/create", element: permitted("performance_create", <CreateEvaluationPeriod />) },
+  { path: "/performance/edit/:id", element: permitted("performance_create", <CreateEvaluationPeriod />) },
   { path: "/performance/assign-peers", element: permitted("performance_create", <AssignPeerEvaluators />) },
   { path: "/performance/self-evaluation", element: permitted("performance_evaluate", <SelfEvaluation />) },
   { path: "/performance/peer-evaluation/:id", element: permitted("performance_evaluate", <PeerEvaluation />) },

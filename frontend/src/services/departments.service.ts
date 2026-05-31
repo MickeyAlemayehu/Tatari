@@ -33,10 +33,29 @@ export interface MyDepartmentResponse {
   }>;
 }
 
+export interface DepartmentEmployee {
+  id: number;
+  name: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  position: string | null;
+  status: string;
+  avatar: string;
+}
+
+export interface DepartmentEmployeesResponse {
+  department: { id: number; name: string };
+  data: DepartmentEmployee[];
+}
+
 export const departmentsService = {
   list: () => api.get<ListResponse<DepartmentRecord>>("/departments"),
 
   get: (id: number) => api.get<DepartmentRecord>(`/departments/${id}`),
+
+  employees: (id: number) =>
+    api.get<DepartmentEmployeesResponse>(`/departments/${id}/employees`),
 
   create: (payload: { name: string; description?: string; manager_id?: number | null }) =>
     api.post<DepartmentRecord>("/departments", payload),

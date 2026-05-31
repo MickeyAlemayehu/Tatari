@@ -4,7 +4,6 @@ import {
   Search,
   Filter,
   Eye,
-  Download,
   Star,
   Briefcase,
   Users,
@@ -12,7 +11,6 @@ import {
   XCircle,
   TrendingUp,
   Calendar,
-  MessageSquare,
   Pause,
   Loader2,
 } from "lucide-react";
@@ -40,7 +38,6 @@ interface ApplicantRow {
   experience: string;
   location: string;
   avatar: string;
-  rating?: number | undefined;
   interviewAt: string | null;
 }
 
@@ -92,7 +89,6 @@ function mapRow(a: ApplicantRecord): ApplicantRow {
       a.firstName ?? a.name.split(" ")[0],
       (a.lastName ?? a.name.split(" ").slice(1).join(" ")) || "?"
     ),
-    rating: a.rating,
     interviewAt: a.interviewAt ?? null,
   };
 }
@@ -220,15 +216,6 @@ export function ApplicantManagement() {
     }
   };
 
-  const bulkMessage = () => {
-    const emails = applicants
-      .filter((a) => selectedApplicants.includes(a.id))
-      .map((a) => a.email)
-      .filter(Boolean);
-    if (emails.length === 0) return;
-    window.location.href = `mailto:${emails.join(",")}`;
-  };
-
   const renderStatusBadge = (status: ApplicantStatus) => (
     <span
       className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs border ${STATUS_STYLES[status]}`}
@@ -241,15 +228,9 @@ export function ApplicantManagement() {
     <AppLayout>
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white border-b border-[#E5E7EB] px-6 py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-xl text-[#111827]">Applicant Management</h1>
-              <p className="text-sm text-[#6B7280]">{filteredApplicants.length} applicants</p>
-            </div>
-            <button className="flex items-center justify-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl">
-              <Download className="w-5 h-5" />
-              <span>Export Data</span>
-            </button>
+          <div>
+            <h1 className="text-xl text-[#111827]">Applicant Management</h1>
+            <p className="text-sm text-[#6B7280]">{filteredApplicants.length} applicants</p>
           </div>
         </header>
 
@@ -453,13 +434,6 @@ export function ApplicantManagement() {
                     )}
                     Reject
                   </button>
-                  <button
-                    onClick={bulkMessage}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#4F46E5]/20 text-indigo-700 rounded-lg hover:bg-[#EEF2FF] transition text-sm"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    Send Message
-                  </button>
                 </div>
               </div>
             )}
@@ -493,7 +467,6 @@ export function ApplicantManagement() {
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Experience</th>
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Applied Date</th>
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Status</th>
-                        <th className="text-center py-3 px-4 text-sm text-[#6B7280]">Rating</th>
                         <th className="text-right py-3 px-4 text-sm text-[#6B7280]">Actions</th>
                       </tr>
                     </thead>
@@ -549,17 +522,6 @@ export function ApplicantManagement() {
                           <td className="py-4 px-4">{renderStatusBadge(applicant.status)}</td>
 
                           <td className="py-4 px-4">
-                            {applicant.rating ? (
-                              <div className="flex items-center justify-center gap-1">
-                                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-                                <span className="text-sm text-[#111827]">{applicant.rating.toFixed(1)}</span>
-                              </div>
-                            ) : (
-                              <span className="text-xs text-[#6B7280] flex justify-center">N/A</span>
-                            )}
-                          </td>
-
-                          <td className="py-4 px-4">
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => navigate(`/applicants/${applicant.id}`)}
@@ -567,16 +529,6 @@ export function ApplicantManagement() {
                                 title="View profile"
                               >
                                 <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  if (applicant.email)
-                                    window.location.href = `mailto:${applicant.email}`;
-                                }}
-                                className="p-2 text-[#6B7280] hover:bg-[#F9FAFB] rounded-lg transition"
-                                title="Email applicant"
-                              >
-                                <MessageSquare className="w-4 h-4" />
                               </button>
                             </div>
                           </td>

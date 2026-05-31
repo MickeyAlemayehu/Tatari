@@ -8,7 +8,6 @@ import { EmployeeDashboard } from "./app/pages/EmployeeDashboard";
 import { HRDashboard } from "./app/pages/HRDashboard";
 import { MyProfile }from "./app/pages/MyProfile";
 import { MyDepartment }from "./app/pages/MyDepartment";
-import { Equipment } from "./app/pages/Equipment";
 import { EmployeeSettings }from "./app/pages/EmployeeSettings";
 import { EmployeeManagement } from "./app/pages/EmployeeManagement";
 import { EmployeeProfile } from "./app/pages/EmployeeProfile";
@@ -121,11 +120,6 @@ export const router = createBrowserRouter([
   path: "/employee/performance/results/:id",
   element: <PerformanceResults />,
 },
-{
-  path: "/employee/equipment",
-  element: <Equipment />,
-},
-
 {
   path: "/employee/notifications",
   element: <Notifications />,

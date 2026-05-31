@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { performanceService, type PerformanceSummaryRecord } from "../../services/performance.service";
 import { ApiError } from "../../lib/api";
 import { initials } from "../../lib/utils";
-import { AsyncState } from "../components/AsyncState";
 import {
   ArrowLeft,
   Search,
@@ -51,22 +50,30 @@ function mapResult(r: PerformanceSummaryRecord): EmployeeResult {
 
 export function PerformanceResultsTable() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const periodParam = searchParams.get("period");
   const [searchQuery, setSearchQuery] = useState("");
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [employeeResults, setEmployeeResults] = useState<EmployeeResult[]>([]);
+  const [periodName, setPeriodName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     performanceService
-      .results()
-      .then((res) => setEmployeeResults(res.data.map(mapResult)))
+      .results(periodParam ? { evaluation_period_id: Number(periodParam) } : undefined)
+      .then((res) => {
+        setEmployeeResults(res.data.map(mapResult));
+        setPeriodName(res.period?.name ?? null);
+      })
       .catch((err) =>
         setError(err instanceof ApiError ? err.message : "Failed to load results.")
       )
       .finally(() => setLoading(false));
-  }, []);
+  }, [periodParam]);
 
   // Filter results
   const filteredResults = employeeResults.filter((result) => {
@@ -91,11 +98,10 @@ export function PerformanceResultsTable() {
   const completedCount = employeeResults.filter((r) => r.status === "completed").length;
   const inProgressCount = employeeResults.filter((r) => r.status === "in-progress").length;
   const pendingCount = employeeResults.filter((r) => r.status === "pending").length;
-  const averageScore =
-    employeeResults
-      .filter((r) => r.finalScore > 0)
-      .reduce((sum, r) => sum + r.finalScore, 0) /
-    employeeResults.filter((r) => r.finalScore > 0).length;
+  const completedResults = employeeResults.filter((r) => r.status === "completed" && r.finalScore > 0);
+  const averageScore = completedResults.length > 0
+    ? completedResults.reduce((sum, r) => sum + r.finalScore, 0) / completedResults.length
+    : 0;
 
   // Get score color
   const getScoreColor = (score: number) => {
@@ -133,7 +139,9 @@ export function PerformanceResultsTable() {
               <div>
                 <h1 className="text-xl text-[#111827]">Performance Results</h1>
                 <p className="text-sm text-[#6B7280]">
-                  Company-wide evaluation results for Q1 2026
+                  {periodName
+                    ? `Company-wide evaluation results for ${periodName}`
+                    : "No active evaluation period"}
                 </p>
               </div>
             </div>

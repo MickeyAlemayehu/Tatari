@@ -20,7 +20,6 @@ import {
   Star,
   CheckCircle,
   XCircle,
-  MessageSquare,
   GraduationCap,
   FileText,
   Eye,
@@ -235,19 +234,32 @@ export function ApplicantProfile() {
     }
   };
 
-  const handleSendMessage = () => {
-    if (!applicant?.email) return;
-    const subject = encodeURIComponent(`Regarding your application for ${applicant.jobTitle}`);
-    window.location.href = `mailto:${applicant.email}?subject=${subject}`;
-  };
-
-  const handleDownloadResume = () => {
+  const handleDownloadResume = async () => {
+    if (!id) return;
     if (!applicant?.resumePath) {
       setActionError("This applicant has no resume on file.");
       return;
     }
-    const base = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/api$/, "");
-    window.open(`${base}/storage/${applicant.resumePath}`, "_blank", "noopener,noreferrer");
+    setActionError(null);
+    try {
+      const { blob, filename } = await applicantsService.downloadResume(Number(id));
+      const objectUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = objectUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setActionError(err.status === 404
+          ? "Could not download resume. File may be missing."
+          : err.message);
+      } else {
+        setActionError("Could not download resume. File may be missing.");
+      }
+    }
   };
 
   if (loading || loadError || !applicant) {
@@ -299,13 +311,6 @@ export function ApplicantProfile() {
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Download Resume</span>
-              </button>
-              <button
-                onClick={handleSendMessage}
-                className="flex items-center gap-2 px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition"
-              >
-                <MessageSquare className="w-4 h-4" />
-                <span className="hidden sm:inline">Message</span>
               </button>
             </div>
           </div>
@@ -469,13 +474,6 @@ export function ApplicantProfile() {
                       Reject
                     </button>
                   )}
-                  <button
-                    onClick={handleSendMessage}
-                    className="flex items-center gap-2 border border-[#E5E7EB] text-[#111827] px-6 py-2.5 rounded-lg hover:bg-[#F9FAFB] transition"
-                  >
-                    <MessageSquare className="w-5 h-5" />
-                    Send Email
-                  </button>
                 </div>
                 {!showSchedule && !showAccept && !showReject && !showWaitlist && (
                   <p className="text-xs text-[#6B7280]">
@@ -518,8 +516,8 @@ export function ApplicantProfile() {
                     onClick={handleDownloadResume}
                     className="flex items-center gap-2 text-[#4F46E5] hover:text-indigo-700 text-sm"
                   >
-                    <Eye className="w-4 h-4" />
-                    Open Resume
+                    <Download className="w-4 h-4" />
+                    Download Resume
                   </button>
                 </div>
                 <p className="text-xs text-[#6B7280]">{applicant.resumePath}</p>

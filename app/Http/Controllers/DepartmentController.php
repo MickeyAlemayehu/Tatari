@@ -66,6 +66,33 @@ class DepartmentController extends Controller
         );
     }
 
+    public function employees(Department $department): JsonResponse
+    {
+        $employees = $department->employees()
+            ->select('id', 'department_id', 'first_name', 'last_name', 'email', 'position', 'status')
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get()
+            ->map(fn ($employee) => [
+                'id'        => $employee->id,
+                'name'      => trim("{$employee->first_name} {$employee->last_name}"),
+                'firstName' => $employee->first_name,
+                'lastName'  => $employee->last_name,
+                'email'     => $employee->email,
+                'position'  => $employee->position,
+                'status'    => $employee->status ?? 'active',
+                'avatar'    => strtoupper(substr($employee->first_name, 0, 1) . substr($employee->last_name, 0, 1)),
+            ]);
+
+        return response()->json([
+            'department' => [
+                'id'   => $department->id,
+                'name' => $department->name,
+            ],
+            'data' => $employees->values()->all(),
+        ]);
+    }
+
     public function mine(Request $request): JsonResponse
     {
         $employee = $request->user('api');

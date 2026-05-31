@@ -103,11 +103,11 @@ export function AssignPeerEvaluators() {
             managerId: e.manager_id ?? null,
           }))
         );
-        setPeriods(periodRes.data);
+        const activePeriods = periodRes.data.filter((p: EvaluationPeriodRecord) => p.status === "active");
+        setPeriods(activePeriods);
         setTemplates(tplRes.data);
 
-        const active = periodRes.data.find((p) => p.status === "active") ?? periodRes.data[0];
-        if (active) setPeriodId(active.id);
+        if (activePeriods.length > 0) setPeriodId(activePeriods[0].id);
       })
       .catch(() => {})
       .finally(() => {
@@ -304,9 +304,9 @@ export function AssignPeerEvaluators() {
                 </div>
               ) : periods.length === 0 ? (
                 <p className="text-sm text-[#6B7280]">
-                  No evaluation periods yet.{" "}
+                  No active evaluation periods found.{" "}
                   <button
-                    onClick={() => navigate("/performance/create-period")}
+                    onClick={() => navigate("/performance/create")}
                     className="text-[#4F46E5] underline"
                   >
                     Create one

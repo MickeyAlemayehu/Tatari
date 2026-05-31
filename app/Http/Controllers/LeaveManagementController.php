@@ -91,6 +91,16 @@ class LeaveManagementController extends Controller
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        // Maternity/Paternity leave must be taken in full — no partial usage allowed
+        if (str_contains(strtolower($leaveType->name), 'maternity') || str_contains(strtolower($leaveType->name), 'paternity')) {
+            if ($days !== $leaveType->max_days_per_year) {
+                return response()->json([
+                    'message' => "Maternity/Paternity leave must be taken for the full {$leaveType->max_days_per_year} days.",
+                    'required_days' => $leaveType->max_days_per_year,
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        }
+
         $leaveRequest = LeaveRequest::create([
             'employee_id' => $employee->id,
             'leave_type_id' => $leaveType->id,

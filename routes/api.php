@@ -94,6 +94,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/departments', [DepartmentController::class, 'index']);
         Route::post('/departments', [DepartmentController::class, 'store']);
         Route::get('/departments/{department}', [DepartmentController::class, 'show']);
+        Route::get('/departments/{department}/employees', [DepartmentController::class, 'employees']);
         Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
     });
@@ -115,12 +116,15 @@ Route::middleware('auth:api')->group(function () {
 
         Route::get('/applicants', [ApplicantController::class, 'index']);
         Route::get('/applicants/{applicant}', [ApplicantController::class, 'show']);
+        Route::get('/applicants/{applicant}/resume/download', [ApplicantController::class, 'downloadResume']);
         Route::patch('/applicants/{applicant}', [ApplicantController::class, 'update']);
     });
 
     Route::middleware('employee.permission:performance_create')->group(function () {
         Route::get('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'periods']);
         Route::post('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'storePeriod']);
+        Route::get('/evaluation-periods/{period}', [PerformanceEvaluationWorkflowController::class, 'getPeriod']);
+        Route::put('/evaluation-periods/{period}', [PerformanceEvaluationWorkflowController::class, 'updatePeriod']);
         Route::post('/evaluation-periods/{period}/activate', [PerformanceEvaluationWorkflowController::class, 'activatePeriod']);
         Route::get('/evaluation-assignments', [PerformanceEvaluationWorkflowController::class, 'assignments']);
         Route::get('/evaluation-assignments/for-employee', [PerformanceEvaluationWorkflowController::class, 'assignmentsForEmployeeInPeriod']);

@@ -114,6 +114,20 @@ export const performanceService = {
     }>;
   }) => api.post<EvaluationPeriodRecord>("/evaluation-periods", payload),
 
+  getPeriod: (periodId: number) => 
+    api.get<EvaluationPeriodRecord>(`/evaluation-periods/${periodId}`),
+
+  updatePeriod: (periodId: number, payload: {
+    name: string;
+    start_date: string;
+    end_date: string;
+    template_ids?: Array<{
+      template_id: number;
+      evaluation_type: "self" | "peer" | "manager";
+      department_id?: number | null;
+    }>;
+  }) => api.put<EvaluationPeriodRecord>(`/evaluation-periods/${periodId}`, payload),
+
   activatePeriod: (periodId: number) =>
     api.post<EvaluationPeriodRecord>(`/evaluation-periods/${periodId}/activate`),
 
@@ -172,9 +186,16 @@ export const performanceService = {
     const qs = params?.evaluation_period_id
       ? `?evaluation_period_id=${params.evaluation_period_id}`
       : "";
-    return api.get<{ data: PerformanceSummaryRecord[] }>(
-      `/performance-results${qs}`
-    );
+    return api.get<{
+      data: PerformanceSummaryRecord[];
+      period: {
+        id: number;
+        name: string;
+        status: string;
+        startDate: string | null;
+        endDate: string | null;
+      } | null;
+    }>(`/performance-results${qs}`);
   },
 
   myResults: () =>

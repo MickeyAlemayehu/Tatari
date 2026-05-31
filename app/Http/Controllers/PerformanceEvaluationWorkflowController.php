@@ -40,6 +40,12 @@ class PerformanceEvaluationWorkflowController extends Controller
         ]);
     }
 
+    public function getPeriod(EvaluationPeriod $period): JsonResponse
+    {
+        $period->load(['templates.department'])->loadCount(['assignments', 'evaluations']);
+        return response()->json($this->periodPayload($period));
+    }
+
     public function storePeriod(Request $request, SelfEvaluationAutoAssigner $autoAssigner): JsonResponse
     {
         $data = $request->validate([
@@ -57,13 +63,31 @@ class PerformanceEvaluationWorkflowController extends Controller
             'template_ids.*.department_id'   => ['nullable', 'integer', 'exists:departments,id'],
         ]);
 
-        $period = DB::transaction(function () use ($data) {
+        $startDate = \Carbon\Carbon::parse($data['start_date'] ?? $data['startDate']);
+        $status = $data['status'] ?? 'active';
+
+        if ($startDate->isFuture()) {
+            $status = 'upcoming';
+        }
+
+        $companyId = $data['company_id'] ?? Company::query()->orderBy('id')->value('id');
+
+        if ($status === 'active') {
+            $existing = $this->findActivePeriod((int) $companyId);
+            if ($existing) {
+                return response()->json([
+                    'message' => "Another evaluation period is already active: \"{$existing->name}\". Mark it completed before starting a new one, or set this period's start date to a future date.",
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        }
+
+        $period = DB::transaction(function () use ($data, $status, $companyId) {
             $period = EvaluationPeriod::create([
-                'company_id'  => $data['company_id'] ?? Company::query()->orderBy('id')->value('id'),
+                'company_id'  => $companyId,
                 'name'        => $data['name'],
                 'start_date'  => $data['start_date'] ?? $data['startDate'],
                 'end_date'    => $data['end_date'] ?? $data['endDate'],
-                'status'      => $data['status'] ?? 'active',
+                'status'      => $status,
                 'template_id' => $data['template_id'] ?? null,
             ]);
 
@@ -75,7 +99,7 @@ class PerformanceEvaluationWorkflowController extends Controller
         });
 
         $warnings = [];
-        if (($data['status'] ?? 'active') === 'active') {
+        if ($period->status === 'active') {
             $warnings = $autoAssigner->assignFor($period);
         }
 
@@ -86,9 +110,61 @@ class PerformanceEvaluationWorkflowController extends Controller
         return response()->json($payload, Response::HTTP_CREATED);
     }
 
+    public function updatePeriod(Request $request, EvaluationPeriod $period): JsonResponse
+    {
+        $data = $request->validate([
+            'name'        => ['required', 'string', 'max:150'],
+            'start_date'  => ['required', 'date'],
+            'startDate'   => ['sometimes', 'date'],
+            'end_date'    => ['required_without:endDate', 'date', 'after:start_date'],
+            'endDate'     => ['sometimes', 'date'],
+            'template_ids' => ['nullable', 'array'],
+            'template_ids.*.template_id'     => ['required_with:template_ids', 'integer', 'exists:evaluation_templates,id'],
+            'template_ids.*.evaluation_type' => ['required_with:template_ids', 'string', Rule::in(['self', 'peer', 'manager'])],
+            'template_ids.*.department_id'   => ['nullable', 'integer', 'exists:departments,id'],
+        ]);
+
+        $startDate = \Carbon\Carbon::parse($data['start_date'] ?? $data['startDate']);
+        $status = $period->status;
+
+        if ($startDate->isFuture() && $status === 'active') {
+            $status = 'upcoming';
+        }
+
+        $period = DB::transaction(function () use ($data, $period, $status) {
+            $period->update([
+                'name'        => $data['name'],
+                'start_date'  => $data['start_date'] ?? $data['startDate'],
+                'end_date'    => $data['end_date'] ?? $data['endDate'],
+                'status'      => $status,
+            ]);
+
+            if (isset($data['template_ids'])) {
+                $this->syncTemplates($period, $data['template_ids']);
+            }
+
+            return $period;
+        });
+
+        $period->load(['templates.department'])->loadCount(['assignments', 'evaluations']);
+        $payload = $this->periodPayload($period);
+
+        return response()->json($payload);
+    }
+
     public function activatePeriod(EvaluationPeriod $period, SelfEvaluationAutoAssigner $autoAssigner): JsonResponse
     {
         $wasActive = $period->status === 'active';
+
+        if (! $wasActive) {
+            $existing = $this->findActivePeriod((int) $period->company_id, $period->id);
+            if ($existing) {
+                return response()->json([
+                    'message' => "Another evaluation period is already active: \"{$existing->name}\". Mark it completed before activating this one.",
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        }
+
         $period->update(['status' => 'active']);
         $warnings = $autoAssigner->assignFor($period);
 
@@ -101,6 +177,18 @@ class PerformanceEvaluationWorkflowController extends Controller
         $payload['selfWarnings'] = $warnings;
 
         return response()->json($payload);
+    }
+
+    private function findActivePeriod(int $companyId, ?int $excludePeriodId = null): ?EvaluationPeriod
+    {
+        $query = EvaluationPeriod::where('company_id', $companyId)
+            ->where('status', 'active');
+
+        if ($excludePeriodId !== null) {
+            $query->where('id', '!=', $excludePeriodId);
+        }
+
+        return $query->first();
     }
 
     /**
@@ -184,6 +272,11 @@ class PerformanceEvaluationWorkflowController extends Controller
 
         $periodId   = (int) $data['evaluation_period_id'];
         $employeeId = (int) $data['employee_id'];
+
+        $period = EvaluationPeriod::findOrFail($periodId);
+        if ($period->status !== 'active') {
+            return response()->json(['message' => 'Cannot assign evaluators to a period that is not active yet.'], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
 
         // Normalise legacy → new
         $peers = $data['peers']
@@ -380,16 +473,107 @@ class PerformanceEvaluationWorkflowController extends Controller
 
     public function results(Request $request): JsonResponse
     {
-        $query = PerformanceSummary::query()
-            ->with(['employee.department', 'period'])
-            ->latest('calculated_at');
+        $period = null;
 
         if ($request->filled('evaluation_period_id')) {
-            $query->where('evaluation_period_id', $request->integer('evaluation_period_id'));
+            $period = EvaluationPeriod::with(['template', 'templates'])
+                ->find($request->integer('evaluation_period_id'));
         }
 
+        if (! $period) {
+            $period = EvaluationPeriod::with(['template', 'templates'])
+                ->where('status', 'active')
+                ->latest('start_date')
+                ->first();
+        }
+
+        if (! $period) {
+            return response()->json(['data' => [], 'period' => null]);
+        }
+
+        $employeeIds = EvaluationAssignment::where('evaluation_period_id', $period->id)
+            ->distinct()
+            ->pluck('employee_id');
+
+        if ($employeeIds->isEmpty()) {
+            return response()->json([
+                'data' => [],
+                'period' => [
+                    'id'        => $period->id,
+                    'name'      => $period->name,
+                    'status'    => $period->status,
+                    'startDate' => $period->start_date?->toDateString(),
+                    'endDate'   => $period->end_date?->toDateString(),
+                ],
+            ]);
+        }
+
+        $employees = Employee::whereIn('id', $employeeIds)
+            ->with('department')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get();
+
+        $evaluations = PerformanceEvaluation::where('evaluation_period_id', $period->id)
+            ->whereIn('employee_id', $employeeIds)
+            ->where('status', 'submitted')
+            ->with('assignment')
+            ->get()
+            ->groupBy('employee_id');
+
+        $rows = $employees->map(function (Employee $employee) use ($evaluations, $period) {
+            $employeeEvals = $evaluations->get($employee->id, collect());
+
+            $scoreFor = function (string $type) use ($employeeEvals) {
+                $matches = $employeeEvals->filter(fn (PerformanceEvaluation $e) => $e->assignment?->evaluator_type === $type);
+                return $matches->isNotEmpty() ? round((float) $matches->avg('score'), 2) : null;
+            };
+
+            $self    = $scoreFor('self');
+            $peer    = $scoreFor('peer');
+            $manager = $scoreFor('manager');
+
+            $hasAll = $self !== null && $peer !== null && $manager !== null;
+            $hasAny = $self !== null || $peer !== null || $manager !== null;
+
+            $finalScore = null;
+            if ($hasAll) {
+                $weights = $this->weightsForEmployee($period, $employee);
+                $totalWeight = $weights['self'] + $weights['peer'] + $weights['manager'];
+                if ($totalWeight > 0) {
+                    $finalScore = round(
+                        ($self * $weights['self'] + $peer * $weights['peer'] + $manager * $weights['manager']) / $totalWeight,
+                        2
+                    );
+                }
+            }
+
+            $status = $hasAll ? 'completed' : ($hasAny ? 'in-progress' : 'pending');
+
+            return [
+                'id'           => $employee->id,
+                'employee_id'  => $employee->id,
+                'employeeName' => trim("{$employee->first_name} {$employee->last_name}"),
+                'department'   => $employee->department?->name,
+                'position'     => $employee->position,
+                'period'       => $period->name,
+                'selfScore'    => $self === null ? 0 : (float) $self,
+                'peerScore'    => $peer === null ? 0 : (float) $peer,
+                'managerScore' => $manager === null ? 0 : (float) $manager,
+                'finalScore'   => $finalScore === null ? 0 : (float) $finalScore,
+                'status'       => $status,
+            ];
+        });
+
         return response()->json([
-            'data' => $query->get()->map(fn (PerformanceSummary $summary) => $this->summaryPayload($summary)),
+            'data'   => $rows->values()->all(),
+            'period' => [
+                'id'        => $period->id,
+                'name'      => $period->name,
+                'status'    => $period->status,
+                'startDate' => $period->start_date?->toDateString(),
+                'endDate'   => $period->end_date?->toDateString(),
+            ],
         ]);
     }
 

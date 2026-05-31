@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
   Save,
@@ -28,9 +28,13 @@ interface TemplateAttachment {
 
 export function CreateEvaluationPeriod() {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
+  const isEditing = !!id;
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [selfWarnings, setSelfWarnings] = useState<SelfWarning[]>([]);
+  const [periodLoading, setPeriodLoading] = useState(isEditing);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Form fields
   const [name, setName] = useState("");
@@ -57,7 +61,26 @@ export function CreateEvaluationPeriod() {
       .then((res) => setTemplates(res.data.filter((t) => t.status === "active")))
       .catch(() => {})
       .finally(() => setTemplatesLoading(false));
-  }, []);
+
+    if (isEditing) {
+      setPeriodLoading(true);
+      setLoadError(null);
+      performanceService
+        .getPeriod(Number(id))
+        .then((p) => {
+          setName(p.title ?? p.name ?? "");
+          setStartDate(p.startDate ?? "");
+          setEndDate(p.endDate ?? "");
+          if (p.templates && p.templates.length > 0) {
+            setAttachments(p.templates.map((t) => ({ templateId: t.id })));
+          }
+        })
+        .catch(() => {
+          setLoadError("Failed to load evaluation period.");
+        })
+        .finally(() => setPeriodLoading(false));
+    }
+  }, [isEditing, id]);
 
   const templateById = useMemo(() => {
     const map = new Map<number, EvaluationTemplateRecord>();
@@ -111,15 +134,25 @@ export function CreateEvaluationPeriod() {
       });
 
     try {
-      const res = await performanceService.createPeriod({
-        name: name.trim(),
-        start_date: startDate,
-        end_date: endDate,
-        status: "active",
-        ...(templateRows.length > 0 ? { template_ids: templateRows } : {}),
-      });
+      let res;
+      if (isEditing) {
+        res = await performanceService.updatePeriod(Number(id), {
+          name: name.trim(),
+          start_date: startDate,
+          end_date: endDate,
+          ...(templateRows.length > 0 ? { template_ids: templateRows } : {}),
+        });
+      } else {
+        res = await performanceService.createPeriod({
+          name: name.trim(),
+          start_date: startDate,
+          end_date: endDate,
+          status: "active",
+          ...(templateRows.length > 0 ? { template_ids: templateRows } : {}),
+        });
+      }
 
-      setSelfWarnings(res.selfWarnings ?? []);
+      setSelfWarnings(res.data?.selfWarnings ?? res.selfWarnings ?? []);
       setShowSuccess(true);
       if (!res.selfWarnings || res.selfWarnings.length === 0) {
         setTimeout(() => navigate("/performance"), 1500);
@@ -127,7 +160,7 @@ export function CreateEvaluationPeriod() {
     } catch (err) {
       setErrors((prev) => ({
         ...prev,
-        name: err instanceof ApiError ? err.message : "Failed to create evaluation period.",
+        name: err instanceof ApiError ? err.message : `Failed to ${isEditing ? "update" : "create"} evaluation period.`,
       }));
     } finally {
       setIsSubmitting(false);
@@ -173,21 +206,39 @@ export function CreateEvaluationPeriod() {
               <ArrowLeft className="w-5 h-5" />
             </button>
             <div>
-              <h1 className="text-xl text-[#111827]">Create Evaluation Period</h1>
-              <p className="text-sm text-[#6B7280]">Set up a new performance review cycle</p>
+              <h1 className="text-xl text-[#111827]">{isEditing ? "Edit Evaluation Period" : "Create Evaluation Period"}</h1>
+              <p className="text-sm text-[#6B7280]">
+                {isEditing ? "Update performance review cycle details" : "Set up a new performance review cycle"}
+              </p>
             </div>
           </div>
         </header>
 
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-3xl mx-auto">
+            {loadError && (
+              <div className="mb-6 p-4 bg-[#FEF2F2] border border-[#EF4444]/30 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-[#EF4444] mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-[#EF4444]">{loadError}</p>
+              </div>
+            )}
+
+            {periodLoading && (
+              <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 flex flex-col items-center justify-center gap-3 text-sm text-[#6B7280]">
+                <Loader2 className="w-6 h-6 animate-spin text-[#4F46E5]" />
+                Loading evaluation period…
+              </div>
+            )}
+
+            {!periodLoading && !loadError && (
+            <>
             {showSuccess && (
               <div className="mb-6 p-4 bg-[#DCFCE7] border border-green-200 rounded-lg flex items-start gap-3">
                 <CheckCircle className="w-5 h-5 text-[#22C55E] mt-0.5 flex-shrink-0" />
                 <div>
                   <h3 className="text-sm text-[#22C55E] mb-1">Success!</h3>
                   <p className="text-sm text-[#22C55E]">
-                    Evaluation period created.{" "}
+                    Evaluation period {isEditing ? "updated" : "created"}.{" "}
                     {selfWarnings.length === 0
                       ? "Redirecting…"
                       : "Review warnings below before continuing."}
@@ -433,7 +484,7 @@ export function CreateEvaluationPeriod() {
                     ) : (
                       <Save className="w-5 h-5" />
                     )}
-                    <span>{isSubmitting ? "Saving..." : "Save Evaluation Period"}</span>
+                    <span>{isSubmitting ? "Saving..." : isEditing ? "Update Evaluation Period" : "Save Evaluation Period"}</span>
                   </button>
                 </div>
               </div>
@@ -446,6 +497,8 @@ export function CreateEvaluationPeriod() {
                 evaluators are set per-employee on the Assign Evaluators page.
               </p>
             </div>
+            </>
+            )}
           </div>
         </main>
       </div>

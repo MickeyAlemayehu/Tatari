@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -128,6 +129,25 @@ class ApplicantController extends Controller
         }
 
         return response()->json($this->payload($applicant->fresh()->load(['vacancy.department', 'reviewer']), true));
+    }
+
+    public function downloadResume(Applicant $applicant)
+    {
+        if (! $applicant->resume_path) {
+            return response()->json(['message' => 'This applicant has no resume on file.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (! Storage::disk('public')->exists($applicant->resume_path)) {
+            return response()->json(['message' => 'Resume file is missing on the server.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $extension    = strtolower(pathinfo($applicant->resume_path, PATHINFO_EXTENSION));
+        $friendlyName = trim("{$applicant->first_name} {$applicant->last_name}");
+        $friendlyName = preg_replace('/[^A-Za-z0-9\- ]/', '', $friendlyName);
+        $friendlyName = trim($friendlyName) ?: "applicant-{$applicant->id}";
+        $downloadName = str_replace(' ', '_', $friendlyName) . '-Resume.' . $extension;
+
+        return Storage::disk('public')->download($applicant->resume_path, $downloadName);
     }
 
     private function sendStatusNotification(Applicant $applicant, string $status): void

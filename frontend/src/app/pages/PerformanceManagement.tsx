@@ -266,24 +266,42 @@ export function PerformanceManagement() {
                     </div>
                   </div>
 
-                  {period.status === "active" && (
-                    <div className="mt-4 pt-4 border-t border-[#E5E7EB] flex gap-2">
-                      <button
-                        onClick={() => navigate(`/performance/results-table?period=${period.id}`)}
-                        className="flex-1 px-4 py-2 bg-[#EEF2FF] text-[#4F46E5] rounded-lg hover:bg-[#4F46E5] hover:text-white transition text-sm"
-                      >
-                        View Results
-                      </button>
-                      {hasPermission("performance_create") && (
+                  {period.status === "active" || period.status === "upcoming" ? (
+                    <div className="mt-4 pt-4 border-t border-[#E5E7EB] flex flex-col gap-2">
+                      <div className="flex gap-2">
                         <button
-                          onClick={() => navigate("/performance/assign-peers")}
-                          className="flex-1 px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm"
+                          onClick={() => navigate(`/performance/results-table?period=${period.id}`)}
+                          className="flex-1 px-4 py-2 bg-[#EEF2FF] text-[#4F46E5] rounded-lg hover:bg-[#4F46E5] hover:text-white transition text-sm"
                         >
-                          Assign Evaluators
+                          View Results
                         </button>
+                        {hasPermission("performance_create") && (
+                          <button
+                            onClick={() => navigate(`/performance/edit/${period.id}`)}
+                            className="flex-1 px-4 py-2 bg-[#F59E0B]/10 text-[#F59E0B] rounded-lg hover:bg-[#F59E0B] hover:text-white transition text-sm flex justify-center items-center gap-1"
+                          >
+                            <Edit className="w-4 h-4" />
+                            Edit
+                          </button>
+                        )}
+                        {hasPermission("performance_create") && (
+                          <button
+                            onClick={() => navigate("/performance/assign-peers")}
+                            disabled={period.status === "upcoming"}
+                            title={period.status === "upcoming" ? "You can only assign evaluators when the period reaches its start date" : ""}
+                            className="flex-1 px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            Assign Evaluators
+                          </button>
+                        )}
+                      </div>
+                      {period.status === "upcoming" && (
+                        <p className="text-xs text-amber-600 text-center mt-1">
+                          Assigning evaluators is disabled until the period reaches its start date.
+                        </p>
                       )}
                     </div>
-                  )}
+                  ) : null}
                 </div>
               ))}
             </div>

@@ -117,6 +117,52 @@ export const api = {
     return apiRequest<T>(path, requestOptions);
   },
 
+  put: <T>(path: string, body?: unknown, options?: RequestOptions) => {
+    const requestOptions: RequestOptions = { ...options, method: "PUT" };
+    if (body !== undefined) {
+      requestOptions.body = JSON.stringify(body);
+    }
+    return apiRequest<T>(path, requestOptions);
+  },
+
   delete: <T>(path: string, options?: RequestOptions) =>
     apiRequest<T>(path, { ...options, method: "DELETE" }),
+
+  download: async (
+    path: string,
+    options: RequestOptions = {}
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const { auth = true, headers, ...rest } = options;
+    const requestHeaders = new Headers(headers);
+    if (!requestHeaders.has("Accept")) requestHeaders.set("Accept", "*/*");
+    if (auth) {
+      const token = getStoredToken();
+      if (token) requestHeaders.set("Authorization", `Bearer ${token}`);
+    }
+
+    const response = await fetch(`${API_BASE}${path}`, {
+      ...rest,
+      method: "GET",
+      headers: requestHeaders,
+    });
+
+    if (!response.ok) {
+      let message = defaultMessageForStatus(response.status);
+      try {
+        const body = await response.clone().json();
+        if (body && typeof body.message === "string") message = body.message;
+      } catch {
+        // non-JSON body — keep the status-derived fallback message
+      }
+      if (response.status === 401) clearSession();
+      throw new ApiError(message, response.status);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const match = disposition.match(/filename\*?=(?:UTF-8'')?["']?([^"';]+)["']?/i);
+    const filename = match?.[1] ? decodeURIComponent(match[1]) : "download";
+
+    return { blob, filename };
+  },
 };

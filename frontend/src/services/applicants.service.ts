@@ -40,6 +40,8 @@ export const applicantsService = {
 
   get: (id: number) => api.get<ApplicantRecord>(`/applicants/${id}`),
 
+  downloadResume: (id: number) => api.download(`/applicants/${id}/resume/download`),
+
   update: (
     id: number,
     payload: {

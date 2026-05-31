@@ -19,7 +19,6 @@ import {
   Settings,
   Building2,
   ClipboardList,
-  Laptop,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
@@ -110,13 +109,6 @@ export function AppSidebar() {
         { name: "My Results", icon: TrendingUp, path: "/employee/performance?tab=results", permission: "access_employee_portal" },
       ],
     },
-    {
-      name: "Equipment",
-      icon: Laptop,
-      path: "/employee/equipment",
-      permission: "access_employee_portal",
-    },
-
     {
       name: "Notifications",
       icon: Bell,
