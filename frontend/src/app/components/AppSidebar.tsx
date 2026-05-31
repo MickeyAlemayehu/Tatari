@@ -116,12 +116,7 @@ export function AppSidebar() {
       path: "/employee/equipment",
       permission: "access_employee_portal",
     },
-    {
-      name: "Payslips",
-      icon: Receipt,
-      path: "/employee/payslip/1",
-      permission: "access_employee_portal",
-    },
+
     {
       name: "Notifications",
       icon: Bell,
@@ -185,12 +180,7 @@ export function AppSidebar() {
         { name: "Applicants", icon: Users, path: "/applicants", permission: "manage_employees" },
       ],
     },
-    {
-      name: "Payroll",
-      icon: DollarSign,
-      path: "/payroll",
-      permission: "manage_payroll",
-    },
+
     {
       name: "Notifications",
       icon: Bell,

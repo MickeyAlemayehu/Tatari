@@ -39,12 +39,7 @@ import { ApplicantManagement } from "./app/pages/ApplicantManagement";
 import { ApplicantProfile } from "./app/pages/ApplicantProfile";
 import { PublicJobListing } from "./app/pages/PublicJobListing";
 import { PublicJobApplication } from "./app/pages/PublicJobApplication";
-import { PayrollDashboard } from "./app/pages/PayrollDashboard";
-import { PayrollGeneration } from "./app/pages/PayrollGeneration";
-import { PayrollImport }from "./app/pages/PayrollImport";
-import { PayrollReview } from "./app/pages/PayrollReview";
-import { PayrollApproval } from "./app/pages/PayrollApproval";
-import { Payslip } from "./app/pages/Payslip";
+
 import { Notifications } from "./app/pages/Notifications";
 import { AdminCompanyRequests } from "./app/pages/AdminCompanyRequests";
 import { CompanyDetails } from "./app/pages/CompanyDetails";
@@ -145,10 +140,7 @@ export const router = createBrowserRouter([
   path: "/employee/equipment",
   element: <Equipment />,
 },
-{
-  path: "/employee/payslip/:id",
-  element: <Payslip />,
-},
+
 {
   path: "/employee/notifications",
   element: <Notifications />,
@@ -269,30 +261,7 @@ export const router = createBrowserRouter([
   path: "/applicants/:id",
   element: <ApplicantProfile />,
 },
-{
-  path: "/payroll",
-  element: <PayrollDashboard />,
-},
-{
-  path: "/payroll/generate",
-  element: <PayrollGeneration />,
-},
-{
-  path: "/payroll/import",
-  element: <PayrollImport />,
-},
-{
-  path: "/payroll/:id/review",
-  element: <PayrollReview />,
-},
-{
-  path: "/payroll/:id/approve",
-  element: <PayrollApproval />,
-},
-{
-  path: "/payslip/:id",
-  element: <Payslip />,
-},
+
 {
   path: "*",
   element: <NotFound />,

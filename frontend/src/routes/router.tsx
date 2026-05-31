@@ -41,12 +41,7 @@ import { ApplicantProfile } from "../app/pages/ApplicantProfile";
 import { PublicJobListing } from "../app/pages/PublicJobListing";
 import { PublicJobDetail } from "../app/pages/PublicJobDetail";
 import { PublicJobApplication } from "../app/pages/PublicJobApplication";
-import { PayrollDashboard } from "../app/pages/PayrollDashboard";
-import { PayrollGeneration } from "../app/pages/PayrollGeneration";
-import { PayrollImport } from "../app/pages/PayrollImport";
-import { PayrollReview } from "../app/pages/PayrollReview";
-import { PayrollApproval } from "../app/pages/PayrollApproval";
-import { Payslip } from "../app/pages/Payslip";
+
 import { Notifications } from "../app/pages/Notifications";
 import { CompanyManagement } from "../app/pages/CompanyManagement";
 
@@ -79,7 +74,7 @@ export const router = createBrowserRouter([
   { path: "/employee/evaluation/:type/:id", element: employee(<EmployeeEvaluationForm />) },
   { path: "/employee/performance/results/:id", element: employee(<PerformanceResults />) },
   { path: "/employee/equipment", element: employee(<Equipment />) },
-  { path: "/employee/payslip/:id", element: employee(<Payslip />) },
+
   { path: "/employee/notifications", element: employee(<Notifications />) },
   { path: "/employee/settings", element: employee(<EmployeeSettings />) },
 
@@ -113,12 +108,7 @@ export const router = createBrowserRouter([
   { path: "/jobs/:id", element: permitted("manage_employees", <JobDetails />) },
   { path: "/applicants", element: permitted("manage_employees", <ApplicantManagement />) },
   { path: "/applicants/:id", element: permitted("manage_employees", <ApplicantProfile />) },
-  { path: "/payroll", element: permitted("manage_payroll", <PayrollDashboard />) },
-  { path: "/payroll/generate", element: permitted("manage_payroll", <PayrollGeneration />) },
-  { path: "/payroll/import", element: permitted("manage_payroll", <PayrollImport />) },
-  { path: "/payroll/:id/review", element: permitted("manage_payroll", <PayrollReview />) },
-  { path: "/payroll/:id/approve", element: permitted("manage_payroll", <PayrollApproval />) },
-  { path: "/payslip/:id", element: authenticated(<Payslip />) },
+
 
   // Platform admin UI (deferred backend — routes kept behind admin portal)
   { path: "/admin/companies", element: admin(<CompanyManagement />) },

@@ -9,7 +9,6 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\LeaveManagementController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PerformanceEvaluationWorkflowController;
 use App\Http\Controllers\PerformanceReviewController;
 use App\Http\Controllers\EvaluationTemplateController;
@@ -53,8 +52,6 @@ Route::middleware('auth:api')->group(function () {
         // Employee-facing: fetch questions for an assignment's template
         Route::get('/evaluation-questions/for-assignment/{assignment}', [PerformanceEvaluationWorkflowController::class, 'questionsForAssignment']);
 
-        Route::get('/payroll/my-payslips', [PayrollController::class, 'myPayslips']);
-        Route::get('/payroll/payslips/{payroll}', [PayrollController::class, 'payslip']);
     });
 
     Route::middleware('employee.permission:access_admin_portal')->group(function () {
@@ -63,9 +60,6 @@ Route::middleware('auth:api')->group(function () {
         Route::patch('/companies/{company}', [CompanyController::class, 'update']);
     });
 
-    Route::get('/admin/payroll', function () {
-        return response()->json(['message' => 'Payroll management API access granted']);
-    })->middleware('employee.permission:manage_payroll');
 
     Route::middleware('employee.permission:access_employee_portal')->group(function () {
         Route::get('/performance-reviews', [PerformanceReviewController::class, 'index']);
@@ -149,20 +143,12 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/evaluation-questions/reorder', [EvaluationTemplateController::class, 'reorderQuestions']);
     });
 
-    Route::middleware('employee.permission:manage_payroll')->group(function () {
+    Route::middleware('employee.permission:manage_employees')->group(function () {
         Route::get('/compensations', [CompensationController::class, 'index']);
         Route::post('/compensations', [CompensationController::class, 'store']);
         Route::get('/compensations/{compensation}', [CompensationController::class, 'show']);
         Route::patch('/compensations/{compensation}', [CompensationController::class, 'update']);
         Route::delete('/compensations/{compensation}', [CompensationController::class, 'destroy']);
-
-        Route::get('/payroll', [PayrollController::class, 'index']);
-        Route::get('/payroll/summary', [PayrollController::class, 'summary']);
-        Route::get('/payroll/period', [PayrollController::class, 'period']);
-        Route::post('/payroll/generate', [PayrollController::class, 'generate']);
-        Route::get('/payroll/{payroll}', [PayrollController::class, 'show']);
-        Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve']);
-        Route::post('/payroll/{payroll}/reject', [PayrollController::class, 'reject']);
     });
 
     // Permission management (admin only)

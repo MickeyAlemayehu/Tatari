@@ -9,7 +9,6 @@ export function EmployeeSettings() {
     emailNotifications: true,
     leaveApprovalNotifications: true,
     performanceReviewNotifications: true,
-    payslipNotifications: true,
     language: "en",
     theme: "light",
     twoFactorAuth: false,
@@ -114,26 +113,7 @@ export function EmployeeSettings() {
                   </label>
                 </div>
 
-                {/* Payslip Notifications */}
-                <div className="flex items-center justify-between p-4 bg-[#F9FAFB] rounded-lg">
-                  <div>
-                    <h4 className="text-sm text-[#111827] mb-1">Payslip Availability</h4>
-                    <p className="text-xs text-[#6B7280]">
-                      Get notified when new payslips are available
-                    </p>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={settings.payslipNotifications}
-                      onChange={(e) =>
-                        setSettings({ ...settings, payslipNotifications: e.target.checked })
-                      }
-                      className="sr-only peer"
-                    />
-                    <div className="w-11 h-6 bg-[#E5E7EB] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#4F46E5] rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-[#E5E7EB] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#4F46E5]"></div>
-                  </label>
-                </div>
+
 
                 {/* Sound Effects */}
                 <div className="flex items-center justify-between p-4 bg-[#F9FAFB] rounded-lg">
