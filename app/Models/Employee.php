@@ -15,7 +15,7 @@ class Employee extends Authenticatable
         'email','password','first_name','last_name','position',
         'department_id','manager_id','permission_level',
         'permission_override','custom_override','revoked_permissions',
-        'must_change_password','status',
+        'must_change_password','status','deactivated_at',
         'phone','date_of_birth','address','city','state','zip_code'
     ];
 
@@ -99,5 +99,10 @@ class Employee extends Authenticatable
     public function performanceReviewsGiven()
     {
         return $this->hasMany(PerformanceReview::class, 'reviewer_id');
+    }
+
+    public function getFiredAtAttribute()
+    {
+        return $this->deactivated_at;
     }
 }

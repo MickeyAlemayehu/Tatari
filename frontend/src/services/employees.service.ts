@@ -14,6 +14,7 @@ export interface EmployeeRecord extends Employee {
   state?: string | null;
   zip_code?: string | null;
   created_at?: string;
+  deactivated_at?: string | null;
 }
 
 export const employeesService = {

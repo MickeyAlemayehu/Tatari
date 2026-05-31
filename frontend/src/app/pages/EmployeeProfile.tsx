@@ -74,6 +74,7 @@ interface EmployeeProfileView extends EditableProfile {
   leaveHistory: EmployeeLeaveHistoryView[];
   performance: EmployeePerformanceView;
   equipment: EmployeeEquipmentView[];
+  deactivatedAt?: string | null;
 }
 
 function toFormDate(value?: string | null): string {
@@ -117,6 +118,7 @@ function buildView(
       lastReviewDate: new Date().toISOString(),
     },
     equipment: [],
+    deactivatedAt: emp.deactivated_at ?? null,
   };
 }
 
@@ -307,6 +309,14 @@ export function EmployeeProfile() {
                       {employee.status === "active" ? "Active" : "Inactive"}
                     </Badge>
                   </div>
+                  {employee.status === "inactive" && employee.deactivatedAt && (
+                    <div className="mb-3 p-2 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg flex items-center gap-2">
+                      <X className="w-4 h-4 text-[#EF4444]" />
+                      <span className="text-sm text-[#EF4444]">
+                        Not working anymore • Fired on {formatDate(employee.deactivatedAt)}
+                      </span>
+                    </div>
+                  )}
                   <p className="text-[#6B7280] mb-4">
                     {employee.position} • {employee.department}
                   </p>

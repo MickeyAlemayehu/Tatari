@@ -112,7 +112,10 @@ class EmployeeController extends Controller
 
     public function deactivate(Employee $employee): JsonResponse
     {
-        $employee->update(['status' => 'inactive']);
+        $employee->update([
+            'status' => 'inactive',
+            'deactivated_at' => now(),
+        ]);
 
         request()->attributes->set('skip_audit_log', true);
         AuditLog::record(
