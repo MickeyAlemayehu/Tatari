@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Company;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -63,6 +64,15 @@ class CompanyController extends Controller
         ]);
 
         $company->update($data);
+
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Updated company',
+            module: 'Company',
+            description: "Updated company settings for {$company->company_name}",
+            employee: $request->user(),
+            status: 'success'
+        );
 
         return response()->json($this->payload(
             $company->fresh()->loadCount(['departments', 'employees', 'payrolls']),

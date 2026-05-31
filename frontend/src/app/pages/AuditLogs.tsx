@@ -1,19 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Search, Filter, Eye, Calendar, User, Activity, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Search, Filter, Eye, Calendar, User, Activity, CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
-
-interface AuditLog {
-  id: number;
-  user: string;
-  action: string;
-  module: string;
-  details: string;
-  timestamp: string;
-  status: "success" | "failed" | "warning";
-  ipAddress: string;
-}
+import { auditService, AuditLogRecord } from "../../services/audit.service";
+import { toast } from "sonner";
 
 export function AuditLogs() {
   const navigate = useNavigate();
@@ -24,157 +15,55 @@ export function AuditLogs() {
   const [dateRange, setDateRange] = useState({ start: "", end: "" });
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 15;
 
-  // Mock audit logs data
-  const [logs] = useState<AuditLog[]>([
-    {
-      id: 1,
-      user: "John Admin",
-      action: "Updated employee record",
-      module: "Employee Management",
-      details: "Modified salary for EMP-001",
-      timestamp: "2026-05-01 14:32:15",
-      status: "success",
-      ipAddress: "192.168.1.100",
-    },
-    {
-      id: 2,
-      user: "Sarah HR",
-      action: "Approved leave request",
-      module: "Leave Management",
-      details: "Approved 5 days leave for John Doe",
-      timestamp: "2026-05-01 13:45:22",
-      status: "success",
-      ipAddress: "192.168.1.105",
-    },
-    {
-      id: 3,
-      user: "Mike Manager",
-      action: "Generated payroll",
-      module: "Payroll",
-      details: "Generated payroll for March 2026",
-      timestamp: "2026-05-01 12:15:08",
-      status: "success",
-      ipAddress: "192.168.1.110",
-    },
-    {
-      id: 4,
-      user: "John Admin",
-      action: "Failed login attempt",
-      module: "Authentication",
-      details: "Incorrect password",
-      timestamp: "2026-05-01 11:20:45",
-      status: "failed",
-      ipAddress: "192.168.1.100",
-    },
-    {
-      id: 5,
-      user: "Sarah HR",
-      action: "Created new employee",
-      module: "Employee Management",
-      details: "Added employee EMP-125",
-      timestamp: "2026-05-01 10:30:12",
-      status: "success",
-      ipAddress: "192.168.1.105",
-    },
-    {
-      id: 6,
-      user: "System",
-      action: "Backup completed",
-      module: "System",
-      details: "Daily backup successful",
-      timestamp: "2026-05-01 02:00:00",
-      status: "success",
-      ipAddress: "127.0.0.1",
-    },
-    {
-      id: 7,
-      user: "Mike Manager",
-      action: "Updated performance review",
-      module: "Performance",
-      details: "Completed Q1 2026 review for EMP-045",
-      timestamp: "2026-04-30 16:45:30",
-      status: "success",
-      ipAddress: "192.168.1.110",
-    },
-    {
-      id: 8,
-      user: "System",
-      action: "Email notification failed",
-      module: "Notifications",
-      details: "SMTP connection timeout",
-      timestamp: "2026-04-30 15:20:18",
-      status: "failed",
-      ipAddress: "127.0.0.1",
-    },
-    {
-      id: 9,
-      user: "Sarah HR",
-      action: "Rejected leave request",
-      module: "Leave Management",
-      details: "Insufficient leave balance for EMP-089",
-      timestamp: "2026-04-30 14:10:05",
-      status: "warning",
-      ipAddress: "192.168.1.105",
-    },
-    {
-      id: 10,
-      user: "John Admin",
-      action: "Modified system settings",
-      module: "System",
-      details: "Changed session timeout to 30 minutes",
-      timestamp: "2026-04-30 11:55:42",
-      status: "success",
-      ipAddress: "192.168.1.100",
-    },
-    {
-      id: 11,
-      user: "Mike Manager",
-      action: "Approved payroll",
-      module: "Payroll",
-      details: "Approved March 2026 payroll batch",
-      timestamp: "2026-04-30 10:20:33",
-      status: "success",
-      ipAddress: "192.168.1.110",
-    },
-    {
-      id: 12,
-      user: "Sarah HR",
-      action: "Imported employee data",
-      module: "Employee Management",
-      details: "Bulk import of 25 employees",
-      timestamp: "2026-04-29 16:30:20",
-      status: "success",
-      ipAddress: "192.168.1.105",
-    },
-  ]);
+  const [logs, setLogs] = useState<AuditLogRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [modules, setModules] = useState<string[]>([]);
 
-  // Filter logs
-  const filteredLogs = logs.filter((log) => {
-    const matchesSearch =
-      searchQuery === "" ||
-      log.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      log.details.toLowerCase().includes(searchQuery.toLowerCase());
+  useEffect(() => {
+    fetchModules();
+  }, []);
 
-    const matchesModule = filterModule === "all" || log.module === filterModule;
-    const matchesStatus = filterStatus === "all" || log.status === filterStatus;
-    const matchesUser = filterUser === "all" || log.user === filterUser;
+  useEffect(() => {
+    fetchLogs();
+  }, [currentPage, searchQuery, filterModule, filterStatus, filterUser, dateRange]);
 
-    return matchesSearch && matchesModule && matchesStatus && matchesUser;
-  });
+  const fetchModules = async () => {
+    try {
+      const response = await auditService.modules();
+      setModules(response);
+    } catch (error) {
+      console.error("Failed to fetch modules:", error);
+    }
+  };
 
-  // Pagination
-  const totalPages = Math.ceil(filteredLogs.length / itemsPerPage);
-  const paginatedLogs = filteredLogs.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const response = await auditService.list({
+        search: searchQuery || undefined,
+        module: filterModule !== "all" ? filterModule : undefined,
+        status: filterStatus !== "all" ? filterStatus : undefined,
+        user: filterUser !== "all" ? filterUser : undefined,
+        from: dateRange.start || undefined,
+        to: dateRange.end || undefined,
+        page: currentPage,
+        per_page: itemsPerPage,
+      });
 
-  // Get unique modules and users for filters
-  const modules = Array.from(new Set(logs.map((log) => log.module)));
-  const users = Array.from(new Set(logs.map((log) => log.user)));
+      setLogs(response.data || []);
+      setTotalItems(response.total || 0);
+      setTotalPages(response.last_page || 1);
+    } catch (error) {
+      toast.error("Failed to load audit logs");
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -189,6 +78,9 @@ export function AuditLogs() {
     }
   };
 
+  // Mocking users filter since we don't have a specific users endpoint yet
+  // We can just rely on manual input or leave it if backend handles it
+  
   return (
     <AppLayout title="Audit Logs" subtitle="Track all system activities and changes">
       <div className="p-6">
@@ -218,7 +110,10 @@ export function AuditLogs() {
                     type="text"
                     placeholder="Search logs..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value);
+                      setCurrentPage(1);
+                    }}
                     className="w-full pl-12 pr-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
                   />
                 </div>
@@ -237,13 +132,16 @@ export function AuditLogs() {
             {/* Advanced Filters */}
             {showFilters && (
               <div className="mt-4 pt-4 border-t border-[#E5E7EB]">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Module Filter */}
                   <div>
                     <label className="block text-sm text-[#6B7280] mb-2">Module</label>
                     <select
                       value={filterModule}
-                      onChange={(e) => setFilterModule(e.target.value)}
+                      onChange={(e) => {
+                        setFilterModule(e.target.value);
+                        setCurrentPage(1);
+                      }}
                       className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
                     >
                       <option value="all">All Modules</option>
@@ -255,29 +153,15 @@ export function AuditLogs() {
                     </select>
                   </div>
 
-                  {/* User Filter */}
-                  <div>
-                    <label className="block text-sm text-[#6B7280] mb-2">User</label>
-                    <select
-                      value={filterUser}
-                      onChange={(e) => setFilterUser(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-                    >
-                      <option value="all">All Users</option>
-                      {users.map((user) => (
-                        <option key={user} value={user}>
-                          {user}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
                   {/* Status Filter */}
                   <div>
                     <label className="block text-sm text-[#6B7280] mb-2">Status</label>
                     <select
                       value={filterStatus}
-                      onChange={(e) => setFilterStatus(e.target.value)}
+                      onChange={(e) => {
+                        setFilterStatus(e.target.value);
+                        setCurrentPage(1);
+                      }}
                       className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
                     >
                       <option value="all">All Status</option>
@@ -295,7 +179,20 @@ export function AuditLogs() {
                       <input
                         type="date"
                         value={dateRange.start}
-                        onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                        onChange={(e) => {
+                          setDateRange({ ...dateRange, start: e.target.value });
+                          setCurrentPage(1);
+                        }}
+                        className="flex-1 px-3 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] text-sm"
+                      />
+                      <span className="text-[#6B7280]">-</span>
+                      <input
+                        type="date"
+                        value={dateRange.end}
+                        onChange={(e) => {
+                          setDateRange({ ...dateRange, end: e.target.value });
+                          setCurrentPage(1);
+                        }}
                         className="flex-1 px-3 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] text-sm"
                       />
                     </div>
@@ -307,113 +204,113 @@ export function AuditLogs() {
 
           {/* Audit Logs Table */}
           <div className="bg-white rounded-xl border border-[#E5E7EB] overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs text-[#6B7280]">User</th>
-                    <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Action</th>
-                    <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Module</th>
-                    <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Date & Time</th>
-                    <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Status</th>
-                    <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[#E5E7EB]">
-                  {paginatedLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-[#F9FAFB] transition">
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center text-white text-xs">
-                            {log.user[0]}
-                          </div>
-                          <div>
-                            <p className="text-sm text-[#111827]">{log.user}</p>
-                            <p className="text-xs text-[#6B7280]">{log.ipAddress}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-[#111827]">{log.action}</p>
-                        <p className="text-xs text-[#6B7280]">{log.details}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="inline-flex items-center gap-2 px-3 py-1 bg-[#EEF2FF] text-[#4F46E5] rounded-lg text-xs">
-                          {log.module}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-[#111827]">{log.timestamp}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <Badge
-                          variant={
-                            log.status === "success"
-                              ? "success"
-                              : log.status === "failed"
-                              ? "danger"
-                              : "warning"
-                          }
-                          size="sm"
-                        >
-                          <span className="flex items-center gap-1">
-                            {getStatusIcon(log.status)}
-                            {log.status}
-                          </span>
-                        </Badge>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-[#4F46E5] hover:bg-[#EEF2FF] rounded-lg transition">
-                          <Eye className="w-4 h-4" />
-                          View
-                        </button>
-                      </td>
+            <div className="overflow-x-auto min-h-[400px]">
+              {loading ? (
+                <div className="flex items-center justify-center h-full min-h-[400px]">
+                  <Loader2 className="w-8 h-8 text-[#4F46E5] animate-spin" />
+                </div>
+              ) : logs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[400px] text-[#6B7280]">
+                  <Activity className="w-12 h-12 mb-4 text-[#D1D5DB]" />
+                  <p className="text-lg font-medium text-[#111827]">No audit logs found</p>
+                  <p>Adjust your filters or try a different search term.</p>
+                </div>
+              ) : (
+                <table className="w-full">
+                  <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs text-[#6B7280]">User</th>
+                      <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Action</th>
+                      <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Module</th>
+                      <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Date & Time</th>
+                      <th className="px-6 py-4 text-left text-xs text-[#6B7280]">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-[#E5E7EB]">
+                    {logs.map((log) => (
+                      <tr key={log.id} className="hover:bg-[#F9FAFB] transition">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center text-white text-xs shrink-0">
+                              {log.user ? log.user[0].toUpperCase() : 'S'}
+                            </div>
+                            <div>
+                              <p className="text-sm text-[#111827] truncate max-w-[150px]">{log.user}</p>
+                              <p className="text-xs text-[#6B7280]">{log.ipAddress}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-[#111827]">{log.action}</p>
+                          <p className="text-xs text-[#6B7280] line-clamp-1" title={log.details}>{log.details}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="inline-flex items-center gap-2 px-3 py-1 bg-[#EEF2FF] text-[#4F46E5] rounded-lg text-xs">
+                            {log.module}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <p className="text-sm text-[#111827] whitespace-nowrap">{log.timestamp}</p>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge
+                            variant={
+                              log.status === "success"
+                                ? "success"
+                                : log.status === "failed"
+                                ? "danger"
+                                : "warning"
+                            }
+                            size="sm"
+                          >
+                            <span className="flex items-center gap-1">
+                              {getStatusIcon(log.status)}
+                              <span className="capitalize">{log.status}</span>
+                            </span>
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             {/* Pagination */}
-            <div className="px-6 py-4 border-t border-[#E5E7EB] flex items-center justify-between">
-              <p className="text-sm text-[#6B7280]">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                {Math.min(currentPage * itemsPerPage, filteredLogs.length)} of{" "}
-                {filteredLogs.length} entries
-              </p>
+            {!loading && logs.length > 0 && (
+              <div className="px-6 py-4 border-t border-[#E5E7EB] flex flex-col sm:flex-row items-center justify-between gap-4">
+                <p className="text-sm text-[#6B7280]">
+                  Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                  {Math.min(currentPage * itemsPerPage, totalItems)} of{" "}
+                  {totalItems} entries
+                </p>
 
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                <div className="flex items-center gap-2">
                   <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`px-4 py-2 rounded-lg transition ${
-                      currentPage === page
-                        ? "bg-[#4F46E5] text-white"
-                        : "border border-[#E5E7EB] text-[#6B7280] hover:bg-[#F9FAFB]"
-                    }`}
+                    onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {page}
+                    Previous
                   </button>
-                ))}
 
-                <button
-                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                  className="px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
+                  <div className="hidden sm:flex items-center gap-2">
+                    {/* Simplified pagination for a clean look */}
+                    <span className="text-sm text-[#6B7280]">
+                      Page <span className="font-medium text-[#111827]">{currentPage}</span> of <span className="font-medium text-[#111827]">{totalPages}</span>
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="px-4 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </div>
       </div>

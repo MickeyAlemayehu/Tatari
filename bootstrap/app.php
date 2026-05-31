@@ -25,6 +25,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'employee.permission' => CheckEmployeePermission::class,
         ]);
+        
+        $middleware->api(append: [
+            \App\Http\Middleware\CheckAccountStatus::class,
+            \App\Http\Middleware\LogsActivity::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->render(function (AuthenticationException $exception, Request $request) {

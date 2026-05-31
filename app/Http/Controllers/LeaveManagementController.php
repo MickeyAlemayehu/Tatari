@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
@@ -147,6 +148,15 @@ class LeaveManagementController extends Controller
 
         event(new LeaveRequestApproved($leaveRequest->fresh(), $approver));
 
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Approved leave request',
+            module: 'Leave Management',
+            description: "Approved {$days} day(s) leave for {$leaveRequest->employee->first_name} {$leaveRequest->employee->last_name}",
+            employee: $approver,
+            status: 'success'
+        );
+
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }
 
@@ -175,6 +185,15 @@ class LeaveManagementController extends Controller
         $balance->update(['pending_days' => max(0, $balance->pending_days - $days)]);
 
         event(new LeaveRequestRejected($leaveRequest->fresh(), $approver, $data['rejection_reason'] ?? $data['reason'] ?? null));
+
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Rejected leave request',
+            module: 'Leave Management',
+            description: "Rejected {$days} day(s) leave for {$leaveRequest->employee->first_name} {$leaveRequest->employee->last_name}",
+            employee: $approver,
+            status: 'warning'
+        );
 
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }

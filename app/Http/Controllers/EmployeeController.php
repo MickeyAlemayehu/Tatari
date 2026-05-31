@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEmployeeRequest;
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Support\EmployeePermissions;
 use App\Events\EmployeeCreated;
@@ -52,6 +53,15 @@ class EmployeeController extends Controller
 
         event(new EmployeeCreated($employee));
 
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Created employee',
+            module: 'Employee Management',
+            description: "Created new employee record for {$employee->first_name} {$employee->last_name}",
+            employee: $request->user(),
+            status: 'success'
+        );
+
         return response()->json(
             $employee->load('department:id,name', 'manager:id,first_name,last_name'),
             Response::HTTP_CREATED
@@ -88,12 +98,30 @@ class EmployeeController extends Controller
 
         $employee->update($data);
 
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Updated employee',
+            module: 'Employee Management',
+            description: "Updated record for {$employee->first_name} {$employee->last_name}",
+            employee: $request->user(),
+            status: 'success'
+        );
+
         return response()->json($employee->load('department:id,name', 'manager:id,first_name,last_name'));
     }
 
     public function deactivate(Employee $employee): JsonResponse
     {
         $employee->update(['status' => 'inactive']);
+
+        request()->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Deactivated employee',
+            module: 'Employee Management',
+            description: "Deactivated employee {$employee->first_name} {$employee->last_name}",
+            employee: request()->user(),
+            status: 'success'
+        );
 
         return response()->json(['message' => 'Employee deactivated.']);
     }
@@ -192,6 +220,15 @@ class EmployeeController extends Controller
             }
 
             DB::commit();
+
+            $request->attributes->set('skip_audit_log', true);
+            AuditLog::record(
+                action: 'Imported employees',
+                module: 'Employee Management',
+                description: "Bulk imported {$imported} employee(s)",
+                employee: $request->user(),
+                status: 'success'
+            );
         } catch (\Throwable $e) {
             DB::rollBack();
             fclose($handle);

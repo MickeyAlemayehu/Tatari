@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ApiAuthController;
 use App\Http\Controllers\ApplicantController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompensationController;
 use App\Http\Controllers\DepartmentController;
@@ -58,6 +59,9 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/companies', [CompanyController::class, 'index']);
         Route::get('/companies/{company}', [CompanyController::class, 'show']);
         Route::patch('/companies/{company}', [CompanyController::class, 'update']);
+        
+        Route::get('/audit-logs', [AuditLogController::class, 'index']);
+        Route::get('/audit-logs/modules', [AuditLogController::class, 'modules']);
     });
 
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Support\EmployeePermissions;
 use Illuminate\Http\Request;
@@ -21,6 +22,15 @@ class PermissionController extends Controller
 
         $employee->permission_level = $request->permission_level;
         $employee->save();
+
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Updated permission level',
+            module: 'Permissions',
+            description: "Changed permission level to {$request->permission_level} for {$employee->first_name} {$employee->last_name}",
+            employee: $request->user(),
+            status: 'success'
+        );
 
         return response()->json([
             'message' => 'Permission level updated successfully',
@@ -67,6 +77,15 @@ class PermissionController extends Controller
 
         if ($changed) {
             $employee->save();
+
+            $request->attributes->set('skip_audit_log', true);
+            AuditLog::record(
+                action: 'Granted permission',
+                module: 'Permissions',
+                description: "Granted '{$request->permission}' permission to {$employee->first_name} {$employee->last_name}",
+                employee: $request->user(),
+                status: 'success'
+            );
         }
 
         return response()->json([
@@ -114,6 +133,15 @@ class PermissionController extends Controller
 
         if ($changed) {
             $employee->save();
+
+            $request->attributes->set('skip_audit_log', true);
+            AuditLog::record(
+                action: 'Revoked permission',
+                module: 'Permissions',
+                description: "Revoked '{$request->permission}' permission from {$employee->first_name} {$employee->last_name}",
+                employee: $request->user(),
+                status: 'warning'
+            );
         }
 
         return response()->json([
