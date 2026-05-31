@@ -219,18 +219,7 @@ export function AppSidebar() {
       path: "/admin/companies",
       permission: "access_admin_portal",
     },
-    {
-      name: "User Management",
-      icon: Users,
-      path: "/admin/users",
-      permission: "access_admin_portal",
-    },
-    {
-      name: "Role Management",
-      icon: Shield,
-      path: "/admin/roles",
-      permission: "access_admin_portal",
-    },
+
     {
       name: "System Settings",
       icon: Settings,

@@ -48,10 +48,8 @@ import { PayrollReview } from "../app/pages/PayrollReview";
 import { PayrollApproval } from "../app/pages/PayrollApproval";
 import { Payslip } from "../app/pages/Payslip";
 import { Notifications } from "../app/pages/Notifications";
-import { AdminCompanyRequests } from "../app/pages/AdminCompanyRequests";
-import { CompanyDetails } from "../app/pages/CompanyDetails";
-import { RoleManagement } from "../app/pages/RoleManagement";
-import { UserManagement } from "../app/pages/UserManagement";
+import { CompanyManagement } from "../app/pages/CompanyManagement";
+
 import { AdminDashboard } from "../app/pages/AdminDashboard";
 import { SystemSettings } from "../app/pages/SystemSettings";
 import { AuditLogs } from "../app/pages/AuditLogs";
@@ -123,10 +121,8 @@ export const router = createBrowserRouter([
   { path: "/payslip/:id", element: authenticated(<Payslip />) },
 
   // Platform admin UI (deferred backend — routes kept behind admin portal)
-  { path: "/admin/companies", element: admin(<AdminCompanyRequests />) },
-  { path: "/admin/companies/:id", element: admin(<CompanyDetails />) },
-  { path: "/admin/roles", element: admin(<RoleManagement />) },
-  { path: "/admin/users", element: admin(<UserManagement />) },
+  { path: "/admin/companies", element: admin(<CompanyManagement />) },
+
   { path: "/admin/permissions", element: admin(<AdminDashboard />) },
   { path: "/admin/settings", element: admin(<SystemSettings />) },
   { path: "/admin/logs", element: admin(<AuditLogs />) },
