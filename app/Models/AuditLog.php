@@ -42,7 +42,7 @@ class AuditLog extends Model
             'module' => $module,
             'description' => $description,
             'status' => $status,
-            'ip_address' => request()->ip(),
+            'ip_address' => null,
             'metadata' => empty($metadata) ? null : $metadata,
         ]);
     }

@@ -9,7 +9,6 @@ export interface AuditLogRecord {
   details: string;
   timestamp: string;
   status: "success" | "failed" | "warning";
-  ipAddress: string;
   metadata?: Record<string, unknown>;
 }
 

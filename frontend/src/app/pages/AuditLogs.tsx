@@ -236,7 +236,6 @@ export function AuditLogs() {
                             </div>
                             <div>
                               <p className="text-sm text-[#111827] truncate max-w-[150px]">{log.user}</p>
-                              <p className="text-xs text-[#6B7280]">{log.ipAddress}</p>
                             </div>
                           </div>
                         </td>

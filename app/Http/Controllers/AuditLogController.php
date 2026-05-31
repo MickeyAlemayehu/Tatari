@@ -59,7 +59,6 @@ class AuditLogController extends Controller
                 'details' => $log->description,
                 'timestamp' => $log->created_at->format('Y-m-d H:i:s'),
                 'status' => $log->status,
-                'ipAddress' => $log->ip_address,
                 'metadata' => $log->metadata,
             ];
         });
