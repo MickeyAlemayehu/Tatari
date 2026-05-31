@@ -30,7 +30,7 @@ function writeWatermark(employeeId: number | string, value: number): void {
 }
 
 export function useNotifications() {
-  const { isAuthenticated, employee } = useAuth();
+  const { isAuthenticated, employee, logout } = useAuth();
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -173,11 +173,17 @@ export function useNotifications() {
       }
     });
 
+    channel.listen(".employee.deactivated", () => {
+      toast.error("Your account has been deactivated. You have been logged out.", { duration: 5000 });
+      void logout();
+    });
+
     return () => {
       channel.stopListening(".notification.created");
+      channel.stopListening(".employee.deactivated");
       echo.leave(channelName);
     };
-  }, [handleRealtimeNotification, isAuthenticated, employeeId]);
+  }, [handleRealtimeNotification, isAuthenticated, employeeId, logout]);
 
   const markRead = useCallback(
     async (id: number) => {

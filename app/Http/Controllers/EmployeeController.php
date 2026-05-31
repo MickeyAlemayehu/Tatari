@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreEmployeeRequest;
 use App\Models\Employee;
+use App\Support\EmployeePermissions;
 use App\Events\EmployeeCreated;
 use App\Events\EmployeeDeactivated;
 use Illuminate\Http\JsonResponse;
@@ -29,6 +30,14 @@ class EmployeeController extends Controller
             ->with('department:id,name')
             ->orderBy('last_name')
             ->paginate($request->integer('per_page', 50));
+
+        $employees->getCollection()->transform(function (Employee $employee) {
+            $employee->setAttribute('level_name', EmployeePermissions::levelName((int) $employee->permission_level));
+            $employee->setAttribute('effective_permissions', EmployeePermissions::effectivePermissions($employee));
+            $employee->setAttribute('custom_override', $employee->custom_override ?? []);
+            $employee->setAttribute('revoked_permissions', $employee->revoked_permissions ?? []);
+            return $employee;
+        });
 
         return response()->json($employees);
     }
@@ -85,8 +94,6 @@ class EmployeeController extends Controller
     public function deactivate(Employee $employee): JsonResponse
     {
         $employee->update(['status' => 'inactive']);
-
-        event(new EmployeeDeactivated($employee->fresh()));
 
         return response()->json(['message' => 'Employee deactivated.']);
     }

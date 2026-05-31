@@ -44,6 +44,12 @@ class Employee extends Authenticatable
                 $employee->permission_level = EmployeePermissions::normalizeLevel((int) $employee->permission_level);
             }
         });
+
+        static::updated(function (Employee $employee) {
+            if ($employee->wasChanged('status') && $employee->status === 'inactive') {
+                event(new \App\Events\EmployeeDeactivated($employee));
+            }
+        });
     }
 
     public function hasPermission(string $permission): bool

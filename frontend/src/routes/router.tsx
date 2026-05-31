@@ -52,6 +52,7 @@ import { AdminCompanyRequests } from "../app/pages/AdminCompanyRequests";
 import { CompanyDetails } from "../app/pages/CompanyDetails";
 import { RoleManagement } from "../app/pages/RoleManagement";
 import { UserManagement } from "../app/pages/UserManagement";
+import { AdminDashboard } from "../app/pages/AdminDashboard";
 import { SystemSettings } from "../app/pages/SystemSettings";
 import { AuditLogs } from "../app/pages/AuditLogs";
 import { Help } from "../app/pages/Help";
@@ -126,6 +127,7 @@ export const router = createBrowserRouter([
   { path: "/admin/companies/:id", element: admin(<CompanyDetails />) },
   { path: "/admin/roles", element: admin(<RoleManagement />) },
   { path: "/admin/users", element: admin(<UserManagement />) },
+  { path: "/admin/permissions", element: admin(<AdminDashboard />) },
   { path: "/admin/settings", element: admin(<SystemSettings />) },
   { path: "/admin/logs", element: admin(<AuditLogs />) },
 

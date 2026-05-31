@@ -1,0 +1,216 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Employee;
+use App\Support\EmployeePermissions;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
+
+class PermissionController extends Controller
+{
+    public function updatePermissionLevel(Request $request, Employee $employee)
+    {
+        $validator = Validator::make($request->all(), [
+            'permission_level' => 'required|integer|min:1|max:3',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $employee->permission_level = $request->permission_level;
+        $employee->save();
+
+        return response()->json([
+            'message' => 'Permission level updated successfully',
+            'employee' => [
+                'id' => $employee->id,
+                'email' => $employee->email,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'permission_level' => $employee->permission_level,
+                'level_name' => EmployeePermissions::levelName($employee->permission_level),
+                'custom_override' => $employee->custom_override ?? [],
+                'revoked_permissions' => $employee->revoked_permissions ?? [],
+                'effective_permissions' => EmployeePermissions::effectivePermissions($employee),
+            ],
+        ]);
+    }
+
+    public function grantPermission(Request $request, Employee $employee)
+    {
+        $validator = Validator::make($request->all(), [
+            'permission' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $customOverride = $employee->custom_override ?? [];
+        $revokedPermissions = $employee->revoked_permissions ?? [];
+
+        $changed = false;
+
+        if (!in_array($request->permission, $customOverride, true)) {
+            $customOverride[] = $request->permission;
+            $employee->custom_override = $customOverride;
+            $changed = true;
+        }
+
+        if (in_array($request->permission, $revokedPermissions, true)) {
+            $revokedPermissions = array_values(array_filter($revokedPermissions, fn($p) => $p !== $request->permission));
+            $employee->revoked_permissions = $revokedPermissions;
+            $changed = true;
+        }
+
+        if ($changed) {
+            $employee->save();
+        }
+
+        return response()->json([
+            'message' => 'Permission granted successfully',
+            'employee' => [
+                'id' => $employee->id,
+                'email' => $employee->email,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'permission_level' => $employee->permission_level,
+                'level_name' => EmployeePermissions::levelName($employee->permission_level),
+                'custom_override' => $employee->custom_override,
+                'revoked_permissions' => $employee->revoked_permissions ?? [],
+                'effective_permissions' => EmployeePermissions::effectivePermissions($employee),
+            ],
+        ]);
+    }
+
+    public function revokePermission(Request $request, Employee $employee)
+    {
+        $validator = Validator::make($request->all(), [
+            'permission' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['errors' => $validator->errors()], 422);
+        }
+
+        $revokedPermissions = $employee->revoked_permissions ?? [];
+        $customOverride = $employee->custom_override ?? [];
+
+        $changed = false;
+
+        if (!in_array($request->permission, $revokedPermissions, true)) {
+            $revokedPermissions[] = $request->permission;
+            $employee->revoked_permissions = $revokedPermissions;
+            $changed = true;
+        }
+
+        if (in_array($request->permission, $customOverride, true)) {
+            $customOverride = array_values(array_filter($customOverride, fn($p) => $p !== $request->permission));
+            $employee->custom_override = $customOverride;
+            $changed = true;
+        }
+
+        if ($changed) {
+            $employee->save();
+        }
+
+        return response()->json([
+            'message' => 'Permission revoked successfully',
+            'employee' => [
+                'id' => $employee->id,
+                'email' => $employee->email,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'permission_level' => $employee->permission_level,
+                'level_name' => EmployeePermissions::levelName($employee->permission_level),
+                'custom_override' => $employee->custom_override ?? [],
+                'revoked_permissions' => $employee->revoked_permissions,
+                'effective_permissions' => EmployeePermissions::effectivePermissions($employee),
+            ],
+        ]);
+    }
+
+    public function removeGrantedPermission(Request $request, Employee $employee, string $permission)
+    {
+        $permission = urldecode($permission);
+
+        $customOverride = $employee->custom_override ?? [];
+        $customOverride = array_values(array_filter($customOverride, fn($p) => $p !== $permission));
+
+        $employee->custom_override = $customOverride;
+        $employee->save();
+
+        return response()->json([
+            'message' => 'Granted permission removed successfully',
+            'employee' => [
+                'id' => $employee->id,
+                'email' => $employee->email,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'permission_level' => $employee->permission_level,
+                'level_name' => EmployeePermissions::levelName($employee->permission_level),
+                'custom_override' => $employee->custom_override,
+                'revoked_permissions' => $employee->revoked_permissions ?? [],
+                'effective_permissions' => EmployeePermissions::effectivePermissions($employee),
+            ],
+        ]);
+    }
+
+    public function removeRevokedPermission(Request $request, Employee $employee, string $permission)
+    {
+        $permission = urldecode($permission);
+
+        $revokedPermissions = $employee->revoked_permissions ?? [];
+        $revokedPermissions = array_values(array_filter($revokedPermissions, fn($p) => $p !== $permission));
+
+        $employee->revoked_permissions = $revokedPermissions;
+        $employee->save();
+
+        return response()->json([
+            'message' => 'Revoked permission restored successfully',
+            'employee' => [
+                'id' => $employee->id,
+                'email' => $employee->email,
+                'first_name' => $employee->first_name,
+                'last_name' => $employee->last_name,
+                'permission_level' => $employee->permission_level,
+                'level_name' => EmployeePermissions::levelName($employee->permission_level),
+                'custom_override' => $employee->custom_override ?? [],
+                'revoked_permissions' => $employee->revoked_permissions,
+                'effective_permissions' => EmployeePermissions::effectivePermissions($employee),
+            ],
+        ]);
+    }
+
+    public function getAvailablePermissions()
+    {
+        $allPermissions = [];
+
+        for ($level = 1; $level <= 3; $level++) {
+            $permissions = EmployeePermissions::permissionsForLevel($level);
+            $allPermissions = array_merge($allPermissions, $permissions);
+        }
+
+        $allPermissions = array_values(array_unique($allPermissions));
+
+        return response()->json([
+            'permissions' => $allPermissions,
+            'levels' => [
+                1 => [
+                    'name' => EmployeePermissions::levelName(1),
+                    'permissions' => EmployeePermissions::permissionsForLevel(1),
+                ],
+                2 => [
+                    'name' => EmployeePermissions::levelName(2),
+                    'permissions' => EmployeePermissions::permissionsForLevel(2),
+                ],
+                3 => [
+                    'name' => EmployeePermissions::levelName(3),
+                    'permissions' => EmployeePermissions::permissionsForLevel(3),
+                ],
+            ],
+        ]);
+    }
+}

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\PerformanceReviewController;
+use App\Http\Controllers\PermissionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -53,5 +54,15 @@ Route::middleware('auth')->group(function () {
     Route::middleware('employee.permission:manage_performance_reviews')->group(function () {
         Route::patch('/performance-reviews/{performanceReview}', [PerformanceReviewController::class, 'update']);
         Route::post('/performance-reviews/{performanceReview}/complete', [PerformanceReviewController::class, 'complete']);
+    });
+
+    // Permission management (admin only)
+    Route::middleware('employee.permission:access_admin_portal')->group(function () {
+        Route::get('/permissions/available', [PermissionController::class, 'getAvailablePermissions']);
+        Route::patch('/employees/{employee}/permission-level', [PermissionController::class, 'updatePermissionLevel']);
+        Route::post('/employees/{employee}/permissions/grant', [PermissionController::class, 'grantPermission']);
+        Route::post('/employees/{employee}/permissions/revoke', [PermissionController::class, 'revokePermission']);
+        Route::delete('/employees/{employee}/permissions/granted/{permission}', [PermissionController::class, 'removeGrantedPermission']);
+        Route::delete('/employees/{employee}/permissions/revoked/{permission}', [PermissionController::class, 'removeRevokedPermission']);
     });
 });

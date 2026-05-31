@@ -1,234 +1,111 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Search, Filter, Edit, Trash2, Lock, Unlock, Mail, Shield, ArrowLeft, X, UserCircle, Phone, Calendar, Briefcase, AlertCircle, UserPlus, Users } from "lucide-react";
+import { Plus, Search, Filter, Edit, Trash2, Lock, Unlock, Mail, Shield, ArrowLeft, X, UserCircle, Phone, Calendar, Briefcase, AlertCircle, UserPlus, Users, CheckCircle, XCircle } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import { employeesService, type EmployeeRecord } from "../../services/employees.service";
+import { permissionsService, type AvailablePermissions } from "../../services/permissions.service";
 
-interface User {
-  id: number;
-  name: string;
-  email: string;
-  phone: string;
-  role: string;
-  department: string;
-  status: "active" | "inactive" | "suspended";
-  joinDate: string;
-  lastLogin: string;
-  avatar?: string;
-}
-
-type StatusFilter = "all" | "active" | "inactive" | "suspended";
+type StatusFilter = "all" | "active" | "inactive";
 
 export function UserManagement() {
   const navigate = useNavigate();
-  
-  const [users, setUsers] = useState<User[]>([
-    {
-      id: 1,
-      name: "Sarah Johnson",
-      email: "sarah.johnson@company.com",
-      phone: "+1 (555) 123-4567",
-      role: "HR Manager",
-      department: "Human Resources",
-      status: "active",
-      joinDate: "2024-01-15",
-      lastLogin: "2026-03-21 10:30 AM",
-    },
-    {
-      id: 2,
-      name: "Michael Chen",
-      email: "michael.chen@company.com",
-      phone: "+1 (555) 234-5678",
-      role: "Manager",
-      department: "Engineering",
-      status: "active",
-      joinDate: "2023-06-20",
-      lastLogin: "2026-03-21 09:15 AM",
-    },
-    {
-      id: 3,
-      name: "Emily Rodriguez",
-      email: "emily.rodriguez@company.com",
-      phone: "+1 (555) 345-6789",
-      role: "Employee",
-      department: "Marketing",
-      status: "active",
-      joinDate: "2024-03-10",
-      lastLogin: "2026-03-20 04:45 PM",
-    },
-    {
-      id: 4,
-      name: "David Kim",
-      email: "david.kim@company.com",
-      phone: "+1 (555) 456-7890",
-      role: "Payroll Admin",
-      department: "Finance",
-      status: "active",
-      joinDate: "2023-11-05",
-      lastLogin: "2026-03-21 08:00 AM",
-    },
-    {
-      id: 5,
-      name: "Jessica Williams",
-      email: "jessica.williams@company.com",
-      phone: "+1 (555) 567-8901",
-      role: "Recruiter",
-      department: "Human Resources",
-      status: "active",
-      joinDate: "2024-02-28",
-      lastLogin: "2026-03-20 02:30 PM",
-    },
-    {
-      id: 6,
-      name: "Robert Brown",
-      email: "robert.brown@company.com",
-      phone: "+1 (555) 678-9012",
-      role: "Employee",
-      department: "Sales",
-      status: "inactive",
-      joinDate: "2023-08-12",
-      lastLogin: "2026-02-15 11:20 AM",
-    },
-    {
-      id: 7,
-      name: "Amanda Taylor",
-      email: "amanda.taylor@company.com",
-      phone: "+1 (555) 789-0123",
-      role: "Manager",
-      department: "Marketing",
-      status: "active",
-      joinDate: "2023-04-18",
-      lastLogin: "2026-03-21 11:00 AM",
-    },
-    {
-      id: 8,
-      name: "James Wilson",
-      email: "james.wilson@company.com",
-      phone: "+1 (555) 890-1234",
-      role: "Employee",
-      department: "Engineering",
-      status: "suspended",
-      joinDate: "2024-05-22",
-      lastLogin: "2026-03-10 03:15 PM",
-    },
-  ]);
 
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+  const [availablePermissions, setAvailablePermissions] = useState<AvailablePermissions | null>(null);
+  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStatus, setSelectedStatus] = useState<StatusFilter>("all");
-  const [selectedRole, setSelectedRole] = useState<string>("all");
-  const [selectedUser, setSelectedUser] = useState<User | null>(null);
-  const [showAssignRoleModal, setShowAssignRoleModal] = useState(false);
-  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [selectedLevel, setSelectedLevel] = useState<string>("all");
+  const [selectedEmployee, setSelectedEmployee] = useState<EmployeeRecord | null>(null);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [newUserRole, setNewUserRole] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [newPermissionLevel, setNewPermissionLevel] = useState<number>(1);
 
-  // Available roles
-  const availableRoles = [
-    "Super Admin",
-    "HR Manager",
-    "Manager",
-    "Employee",
-    "Recruiter",
-    "Payroll Admin",
-  ];
+  useEffect(() => {
+    loadData();
+  }, []);
 
-  // New user form
-  const [newUser, setNewUser] = useState({
-    name: "",
-    email: "",
-    phone: "",
-    role: "",
-    department: "",
-  });
+  const loadData = async () => {
+    try {
+      setLoading(true);
+      const [employeesRes, permissionsRes] = await Promise.all([
+        employeesService.list({ per_page: 1000 }),
+        permissionsService.getAvailablePermissions(),
+      ]);
+      setEmployees(employeesRes.data);
+      setAvailablePermissions(permissionsRes);
+    } catch (error) {
+      console.error("Failed to load data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Filter users
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = 
-      user.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      user.department.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesStatus = selectedStatus === "all" || user.status === selectedStatus;
-    const matchesRole = selectedRole === "all" || user.role === selectedRole;
-    
-    return matchesSearch && matchesStatus && matchesRole;
+  const filteredEmployees = employees.filter(employee => {
+    const fullName = `${employee.first_name} ${employee.last_name}`.toLowerCase();
+    const matchesSearch =
+      fullName.includes(searchQuery.toLowerCase()) ||
+      employee.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (employee.department?.name || "").toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus = selectedStatus === "all" || employee.status === selectedStatus;
+    const matchesLevel = selectedLevel === "all" || String(employee.permission_level) === selectedLevel;
+
+    return matchesSearch && matchesStatus && matchesLevel;
   });
 
   // Get counts
-  const activeCount = users.filter(u => u.status === "active").length;
-  const inactiveCount = users.filter(u => u.status === "inactive").length;
-  const suspendedCount = users.filter(u => u.status === "suspended").length;
+  const activeCount = employees.filter(e => e.status === "active").length;
+  const inactiveCount = employees.filter(e => e.status === "inactive").length;
 
-  // Handle assign role
-  const handleAssignRole = () => {
-    if (!selectedUser || !newUserRole) {
-      alert("Please select a role");
-      return;
-    }
+  // Handle permission level change
+  const handleUpdatePermissionLevel = async () => {
+    if (!selectedEmployee) return;
 
     setIsProcessing(true);
-    
-    setTimeout(() => {
-      setUsers(users.map(u => 
-        u.id === selectedUser.id ? { ...u, role: newUserRole } : u
-      ));
+    try {
+      await permissionsService.updatePermissionLevel(selectedEmployee.id, newPermissionLevel);
+      await loadData();
+      setShowPermissionModal(false);
+      setSelectedEmployee(null);
+    } catch (error) {
+      console.error("Failed to update permission level:", error);
+      alert("Failed to update permission level");
+    } finally {
       setIsProcessing(false);
-      setShowAssignRoleModal(false);
-      setSelectedUser(null);
-      setNewUserRole("");
-    }, 1000);
-  };
-
-  // Handle create user
-  const handleCreateUser = () => {
-    if (!newUser.name || !newUser.email || !newUser.role) {
-      alert("Please fill in all required fields");
-      return;
     }
-
-    setIsProcessing(true);
-    
-    setTimeout(() => {
-      const user: User = {
-        id: users.length + 1,
-        name: newUser.name,
-        email: newUser.email,
-        phone: newUser.phone,
-        role: newUser.role,
-        department: newUser.department,
-        status: "active",
-        joinDate: new Date().toISOString().split('T')[0],
-        lastLogin: "Never",
-      };
-
-      setUsers([...users, user]);
-      setIsProcessing(false);
-      setShowCreateUserModal(false);
-      setNewUser({
-        name: "",
-        email: "",
-        phone: "",
-        role: "",
-        department: "",
-      });
-    }, 1000);
   };
 
   // Handle delete user
-  const handleDeleteUser = () => {
-    if (!selectedUser) return;
-    
-    setUsers(users.filter(u => u.id !== selectedUser.id));
-    setShowDeleteModal(false);
-    setSelectedUser(null);
+  const handleDeleteUser = async () => {
+    if (!selectedEmployee) return;
+
+    setIsProcessing(true);
+    try {
+      await employeesService.deactivate(selectedEmployee.id);
+      await loadData();
+      setShowDeleteModal(false);
+      setSelectedEmployee(null);
+    } catch (error) {
+      console.error("Failed to deactivate employee:", error);
+      alert("Failed to deactivate employee");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   // Handle status change
-  const handleStatusChange = (user: User, newStatus: "active" | "inactive" | "suspended") => {
-    setUsers(users.map(u => 
-      u.id === user.id ? { ...u, status: newStatus } : u
-    ));
+  const handleStatusChange = async (employee: EmployeeRecord, newStatus: "active" | "inactive") => {
+    try {
+      await employeesService.update(employee.id, { status: newStatus });
+      await loadData();
+    } catch (error) {
+      console.error("Failed to update status:", error);
+      alert("Failed to update status");
+    }
   };
 
   // Get status badge
@@ -246,21 +123,49 @@ export function UserManagement() {
             Inactive
           </Badge>
         );
-      case "suspended":
+      default:
         return (
-          <Badge color="red" icon="x-circle">
-            Suspended
+          <Badge color="gray" icon="clock">
+            {status}
           </Badge>
         );
     }
   };
 
+  // Get level badge
+  const getLevelBadge = (level: number, levelName?: string) => {
+    const colors = {
+      1: "blue",
+      2: "purple",
+      3: "red",
+    } as const;
+
+    return (
+      <Badge color={colors[level as keyof typeof colors] || "gray"} icon="shield">
+        Level {level} - {levelName || "Unknown"}
+      </Badge>
+    );
+  };
+
   // Format date
-  const formatDate = (dateStr: string) => {
-    if (dateStr === "Never") return "Never";
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "N/A";
     const date = new Date(dateStr);
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   };
+
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-[#4F46E5] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+            <p className="text-[#6B7280]">Loading employees...</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
 
   return (
     <AppLayout>
@@ -277,8 +182,8 @@ export function UserManagement() {
                 <ArrowLeft className="w-5 h-5" />
               </button>
               <div>
-                <h1 className="text-xl text-[#111827]">User Management</h1>
-                <p className="text-sm text-[#6B7280]">{users.length} total users</p>
+                <h1 className="text-xl text-[#111827]">Employee Management</h1>
+                <p className="text-sm text-[#6B7280]">{employees.length} total employees</p>
               </div>
             </div>
 
@@ -289,16 +194,16 @@ export function UserManagement() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search users..."
+                  placeholder="Search employees..."
                   className="pl-10 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] w-64"
                 />
               </div>
               <button
-                onClick={() => setShowCreateUserModal(true)}
+                onClick={() => navigate("/employees/create")}
                 className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
               >
                 <Plus className="w-4 h-4" />
-                Add User
+                Add Employee
               </button>
             </div>
           </div>
@@ -308,8 +213,8 @@ export function UserManagement() {
         <div className="bg-white border-b border-[#E5E7EB] px-6 py-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-xl p-4 text-white">
-              <p className="text-sm text-indigo-100 mb-1">Total Users</p>
-              <p className="text-2xl">{users.length}</p>
+              <p className="text-sm text-indigo-100 mb-1">Total Employees</p>
+              <p className="text-2xl">{employees.length}</p>
             </div>
             <div className="bg-[#DCFCE7] border border-green-200 rounded-xl p-4">
               <p className="text-sm text-[#22C55E] mb-1">Active</p>
@@ -319,9 +224,11 @@ export function UserManagement() {
               <p className="text-sm text-[#6B7280] mb-1">Inactive</p>
               <p className="text-2xl text-[#111827]">{inactiveCount}</p>
             </div>
-            <div className="bg-[#FEF2F2] border border-[#EF4444]/20 rounded-xl p-4">
-              <p className="text-sm text-[#EF4444] mb-1">Suspended</p>
-              <p className="text-2xl text-[#EF4444]">{suspendedCount}</p>
+            <div className="bg-[#EEF2FF] border border-[#4F46E5]/20 rounded-xl p-4">
+              <p className="text-sm text-[#4F46E5] mb-1">Departments</p>
+              <p className="text-2xl text-[#4F46E5]">
+                {new Set(employees.filter(e => e.department?.name).map(e => e.department?.name)).size}
+              </p>
             </div>
           </div>
         </div>
@@ -330,7 +237,7 @@ export function UserManagement() {
         <div className="bg-white border-b border-[#E5E7EB] px-6 py-4">
           <div className="flex items-center gap-4">
             <Filter className="w-4 h-4 text-[#6B7280]" />
-            
+
             {/* Status Filter */}
             <div className="flex items-center gap-2">
               <label className="text-sm text-[#6B7280]">Status:</label>
@@ -342,22 +249,21 @@ export function UserManagement() {
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
-                <option value="suspended">Suspended</option>
               </select>
             </div>
 
-            {/* Role Filter */}
+            {/* Permission Level Filter */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-[#6B7280]">Role:</label>
+              <label className="text-sm text-[#6B7280]">Level:</label>
               <select
-                value={selectedRole}
-                onChange={(e) => setSelectedRole(e.target.value)}
+                value={selectedLevel}
+                onChange={(e) => setSelectedLevel(e.target.value)}
                 className="px-3 py-1.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
               >
-                <option value="all">All Roles</option>
-                {availableRoles.map(role => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
+                <option value="all">All Levels</option>
+                <option value="1">Level 1 - Employee</option>
+                <option value="2">Level 2 - HR</option>
+                <option value="3">Level 3 - Administrator</option>
               </select>
             </div>
           </div>
@@ -372,39 +278,38 @@ export function UserManagement() {
                 <table className="w-full">
                   <thead className="bg-[#F9FAFB] border-b border-[#E5E7EB]">
                     <tr>
-                      <th className="text-left text-xs text-[#6B7280] px-6 py-4">User</th>
+                      <th className="text-left text-xs text-[#6B7280] px-6 py-4">Employee</th>
                       <th className="text-left text-xs text-[#6B7280] px-6 py-4">Contact</th>
-                      <th className="text-left text-xs text-[#6B7280] px-6 py-4">Role</th>
+                      <th className="text-left text-xs text-[#6B7280] px-6 py-4">Permission Level</th>
                       <th className="text-left text-xs text-[#6B7280] px-6 py-4">Department</th>
                       <th className="text-left text-xs text-[#6B7280] px-6 py-4">Status</th>
-                      <th className="text-left text-xs text-[#6B7280] px-6 py-4">Last Login</th>
                       <th className="text-right text-xs text-[#6B7280] px-6 py-4">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    {filteredUsers.length === 0 ? (
+                    {filteredEmployees.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="px-6 py-12 text-center">
+                        <td colSpan={6} className="px-6 py-12 text-center">
                           <div className="flex flex-col items-center gap-2">
                             <Users className="w-12 h-12 text-gray-300" />
-                            <p className="text-sm text-[#6B7280]">No users found</p>
+                            <p className="text-sm text-[#6B7280]">No employees found</p>
                           </div>
                         </td>
                       </tr>
                     ) : (
-                      filteredUsers.map((user) => (
-                        <tr key={user.id} className="hover:bg-[#F9FAFB] transition">
-                          {/* User */}
+                      filteredEmployees.map((employee) => (
+                        <tr key={employee.id} className="hover:bg-[#F9FAFB] transition">
+                          {/* Employee */}
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <div className="w-10 h-10 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center flex-shrink-0">
                                 <span className="text-sm text-white font-medium">
-                                  {user.name.split(' ').map(n => n[0]).join('')}
+                                  {employee.first_name[0]}{employee.last_name[0]}
                                 </span>
                               </div>
                               <div>
-                                <p className="text-sm text-[#111827]">{user.name}</p>
-                                <p className="text-xs text-[#6B7280]">Joined {formatDate(user.joinDate)}</p>
+                                <p className="text-sm text-[#111827]">{employee.first_name} {employee.last_name}</p>
+                                <p className="text-xs text-[#6B7280]">{employee.position || "N/A"}</p>
                               </div>
                             </div>
                           </td>
@@ -414,36 +319,30 @@ export function UserManagement() {
                             <div className="space-y-1">
                               <div className="flex items-center gap-2 text-sm text-[#111827]">
                                 <Mail className="w-3.5 h-3.5 text-[#6B7280]" />
-                                <span>{user.email}</span>
+                                <span>{employee.email}</span>
                               </div>
-                              <div className="flex items-center gap-2 text-sm text-[#111827]">
-                                <Phone className="w-3.5 h-3.5 text-[#6B7280]" />
-                                <span>{user.phone}</span>
-                              </div>
+                              {employee.phone && (
+                                <div className="flex items-center gap-2 text-sm text-[#111827]">
+                                  <Phone className="w-3.5 h-3.5 text-[#6B7280]" />
+                                  <span>{employee.phone}</span>
+                                </div>
+                              )}
                             </div>
                           </td>
 
-                          {/* Role */}
+                          {/* Permission Level */}
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-2">
-                              <Shield className="w-4 h-4 text-[#4F46E5]" />
-                              <span className="text-sm text-[#111827]">{user.role}</span>
-                            </div>
+                            {getLevelBadge(employee.permission_level, employee.level_name)}
                           </td>
 
                           {/* Department */}
                           <td className="px-6 py-4">
-                            <span className="text-sm text-[#111827]">{user.department}</span>
+                            <span className="text-sm text-[#111827]">{employee.department?.name || "N/A"}</span>
                           </td>
 
                           {/* Status */}
                           <td className="px-6 py-4">
-                            {getStatusBadge(user.status)}
-                          </td>
-
-                          {/* Last Login */}
-                          <td className="px-6 py-4">
-                            <span className="text-sm text-[#6B7280]">{user.lastLogin}</span>
+                            {getStatusBadge(employee.status || "active")}
                           </td>
 
                           {/* Actions */}
@@ -451,39 +350,39 @@ export function UserManagement() {
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => {
-                                  setSelectedUser(user);
-                                  setNewUserRole(user.role);
-                                  setShowAssignRoleModal(true);
+                                  setSelectedEmployee(employee);
+                                  setNewPermissionLevel(employee.permission_level);
+                                  setShowPermissionModal(true);
                                 }}
                                 className="p-2 text-[#4F46E5] hover:bg-[#EEF2FF] rounded-lg transition"
-                                title="Assign Role"
+                                title="Manage Permissions"
                               >
                                 <Shield className="w-4 h-4" />
                               </button>
-                              {user.status === "active" ? (
+                              {employee.status === "active" ? (
                                 <button
-                                  onClick={() => handleStatusChange(user, "suspended")}
+                                  onClick={() => handleStatusChange(employee, "inactive")}
                                   className="p-2 text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
-                                  title="Suspend User"
+                                  title="Deactivate Employee"
                                 >
                                   <Lock className="w-4 h-4" />
                                 </button>
                               ) : (
                                 <button
-                                  onClick={() => handleStatusChange(user, "active")}
+                                  onClick={() => handleStatusChange(employee, "active")}
                                   className="p-2 text-[#22C55E] hover:bg-[#DCFCE7] rounded-lg transition"
-                                  title="Activate User"
+                                  title="Activate Employee"
                                 >
                                   <Unlock className="w-4 h-4" />
                                 </button>
                               )}
                               <button
                                 onClick={() => {
-                                  setSelectedUser(user);
+                                  setSelectedEmployee(employee);
                                   setShowDeleteModal(true);
                                 }}
                                 className="p-2 text-[#6B7280] hover:text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
-                                title="Delete User"
+                                title="Delete Employee"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -500,218 +399,25 @@ export function UserManagement() {
         </main>
       </div>
 
-      {/* Assign Role Modal */}
-      {showAssignRoleModal && selectedUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-12 h-12 bg-[#EEF2FF] rounded-lg flex items-center justify-center">
-                <Shield className="w-6 h-6 text-[#4F46E5]" />
-              </div>
-              <div>
-                <h3 className="text-lg text-[#111827]">Assign Role</h3>
-                <p className="text-sm text-[#6B7280]">Change user role and permissions</p>
-              </div>
-            </div>
-
-            {/* User Info */}
-            <div className="mb-6 p-4 bg-[#F9FAFB] rounded-lg">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center">
-                  <span className="text-sm text-white font-medium">
-                    {selectedUser.name.split(' ').map(n => n[0]).join('')}
-                  </span>
-                </div>
-                <div>
-                  <p className="text-sm text-[#111827]">{selectedUser.name}</p>
-                  <p className="text-xs text-[#6B7280]">{selectedUser.email}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Current Role */}
-            <div className="mb-4">
-              <label className="block text-sm text-[#111827] mb-2">Current Role</label>
-              <div className="px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg">
-                <div className="flex items-center gap-2 text-sm text-[#111827]">
-                  <Shield className="w-4 h-4 text-[#6B7280]" />
-                  {selectedUser.role}
-                </div>
-              </div>
-            </div>
-
-            {/* New Role */}
-            <div className="mb-6">
-              <label className="block text-sm text-[#111827] mb-2">
-                New Role <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={newUserRole}
-                onChange={(e) => setNewUserRole(e.target.value)}
-                className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-              >
-                <option value="">Select a role</option>
-                {availableRoles.map(role => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowAssignRoleModal(false);
-                  setSelectedUser(null);
-                  setNewUserRole("");
-                }}
-                className="flex-1 px-4 py-2.5 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAssignRole}
-                disabled={!newUserRole || newUserRole === selectedUser.role || isProcessing}
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Assigning...
-                  </>
-                ) : (
-                  <>
-                    <Shield className="w-4 h-4" />
-                    Assign Role
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Permission Management Modal */}
+      {showPermissionModal && selectedEmployee && availablePermissions && (
+        <PermissionManagementModal
+          employee={selectedEmployee}
+          availablePermissions={availablePermissions}
+          newPermissionLevel={newPermissionLevel}
+          setNewPermissionLevel={setNewPermissionLevel}
+          isProcessing={isProcessing}
+          onClose={() => {
+            setShowPermissionModal(false);
+            setSelectedEmployee(null);
+          }}
+          onUpdate={handleUpdatePermissionLevel}
+          onReload={loadData}
+        />
       )}
 
-      {/* Create User Modal */}
-      {showCreateUserModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] p-6">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
-                  <UserPlus className="w-6 h-6 text-white" />
-                </div>
-                <div className="text-white">
-                  <h3 className="text-lg">Add New User</h3>
-                  <p className="text-sm text-indigo-100">Create a new user account</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm text-[#111827] mb-2">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={newUser.name}
-                  onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-                  placeholder="John Doe"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#111827] mb-2">
-                  Email <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={newUser.email}
-                  onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-                  placeholder="john.doe@company.com"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#111827] mb-2">Phone</label>
-                <input
-                  type="tel"
-                  value={newUser.phone}
-                  onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-                  placeholder="+1 (555) 000-0000"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#111827] mb-2">
-                  Role <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-                >
-                  <option value="">Select a role</option>
-                  {availableRoles.map(role => (
-                    <option key={role} value={role}>{role}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm text-[#111827] mb-2">Department</label>
-                <input
-                  type="text"
-                  value={newUser.department}
-                  onChange={(e) => setNewUser({ ...newUser, department: e.target.value })}
-                  className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
-                  placeholder="Engineering"
-                />
-              </div>
-            </div>
-
-            <div className="sticky bottom-0 bg-white border-t border-[#E5E7EB] p-6 flex gap-3">
-              <button
-                onClick={() => {
-                  setShowCreateUserModal(false);
-                  setNewUser({
-                    name: "",
-                    email: "",
-                    phone: "",
-                    role: "",
-                    department: "",
-                  });
-                }}
-                className="flex-1 px-4 py-2.5 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateUser}
-                disabled={!newUser.name || !newUser.email || !newUser.role || isProcessing}
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition disabled:opacity-50"
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="w-4 h-4" />
-                    Create User
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete User Modal */}
-      {showDeleteModal && selectedUser && (
+      {/* Delete Employee Modal */}
+      {showDeleteModal && selectedEmployee && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center gap-3 mb-4">
@@ -719,20 +425,20 @@ export function UserManagement() {
                 <Trash2 className="w-6 h-6 text-[#EF4444]" />
               </div>
               <div>
-                <h3 className="text-lg text-[#111827]">Delete User</h3>
-                <p className="text-sm text-[#6B7280]">This action cannot be undone</p>
+                <h3 className="text-lg text-[#111827]">Deactivate Employee</h3>
+                <p className="text-sm text-[#6B7280]">This action will deactivate the employee</p>
               </div>
             </div>
 
             <p className="text-sm text-[#6B7280] mb-6">
-              Are you sure you want to delete <strong>{selectedUser.name}</strong>? All associated data will be permanently removed.
+              Are you sure you want to deactivate <strong>{selectedEmployee.first_name} {selectedEmployee.last_name}</strong>? They will no longer be able to access the system.
             </p>
 
             <div className="flex gap-3">
               <button
                 onClick={() => {
                   setShowDeleteModal(false);
-                  setSelectedUser(null);
+                  setSelectedEmployee(null);
                 }}
                 className="flex-1 px-4 py-2.5 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition"
               >
@@ -740,15 +446,377 @@ export function UserManagement() {
               </button>
               <button
                 onClick={handleDeleteUser}
-                className="flex-1 flex items-center justify-center gap-2 bg-[#EF4444] text-white px-4 py-2.5 rounded-lg hover:bg-[#EF4444] transition"
+                disabled={isProcessing}
+                className="flex-1 flex items-center justify-center gap-2 bg-[#EF4444] text-white px-4 py-2.5 rounded-lg hover:bg-[#DC2626] transition disabled:opacity-50"
               >
-                <Trash2 className="w-4 h-4" />
-                Delete User
+                {isProcessing ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Deactivating...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    Deactivate Employee
+                  </>
+                )}
               </button>
             </div>
           </div>
         </div>
       )}
     </AppLayout>
+  );
+}
+
+interface PermissionManagementModalProps {
+  employee: EmployeeRecord;
+  availablePermissions: AvailablePermissions;
+  newPermissionLevel: number;
+  setNewPermissionLevel: (level: number) => void;
+  isProcessing: boolean;
+  onClose: () => void;
+  onUpdate: () => void;
+  onReload: () => void;
+}
+
+function PermissionManagementModal({
+  employee,
+  availablePermissions,
+  newPermissionLevel,
+  setNewPermissionLevel,
+  isProcessing,
+  onClose,
+  onUpdate,
+  onReload,
+}: PermissionManagementModalProps) {
+  const [activeTab, setActiveTab] = useState<"level" | "grant" | "revoke">("level");
+  const [selectedPermission, setSelectedPermission] = useState("");
+  const [processing, setProcessing] = useState(false);
+
+  const handleGrantPermission = async () => {
+    if (!selectedPermission) return;
+
+    setProcessing(true);
+    try {
+      await permissionsService.grantPermission(employee.id, selectedPermission);
+      await onReload();
+      setSelectedPermission("");
+    } catch (error) {
+      console.error("Failed to grant permission:", error);
+      alert("Failed to grant permission");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleRevokePermission = async () => {
+    if (!selectedPermission) return;
+
+    setProcessing(true);
+    try {
+      await permissionsService.revokePermission(employee.id, selectedPermission);
+      await onReload();
+      setSelectedPermission("");
+    } catch (error) {
+      console.error("Failed to revoke permission:", error);
+      alert("Failed to revoke permission");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleRemoveGranted = async (permission: string) => {
+    setProcessing(true);
+    try {
+      await permissionsService.removeGrantedPermission(employee.id, permission);
+      await onReload();
+    } catch (error) {
+      console.error("Failed to remove granted permission:", error);
+      alert("Failed to remove granted permission");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleRemoveRevoked = async (permission: string) => {
+    setProcessing(true);
+    try {
+      await permissionsService.removeRevokedPermission(employee.id, permission);
+      await onReload();
+    } catch (error) {
+      console.error("Failed to restore permission:", error);
+      alert("Failed to restore permission");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const levelPermissions = availablePermissions.levels[newPermissionLevel as 1 | 2 | 3]?.permissions || [];
+  const customOverride = employee.custom_override || [];
+  const revokedPermissions = employee.revoked_permissions || [];
+  const effectivePermissions = employee.effective_permissions || [];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full my-8">
+        <div className="sticky top-0 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] p-6 rounded-t-xl">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-lg flex items-center justify-center">
+                <Shield className="w-6 h-6 text-white" />
+              </div>
+              <div className="text-white">
+                <h3 className="text-lg">Permission Management</h3>
+                <p className="text-sm text-indigo-100">{employee.first_name} {employee.last_name}</p>
+              </div>
+            </div>
+            <button
+              onClick={onClose}
+              className="p-2 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="border-b border-[#E5E7EB] px-6">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab("level")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+                activeTab === "level"
+                  ? "border-[#4F46E5] text-[#4F46E5]"
+                  : "border-transparent text-[#6B7280] hover:text-[#111827]"
+              }`}
+            >
+              Permission Level
+            </button>
+            <button
+              onClick={() => setActiveTab("grant")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+                activeTab === "grant"
+                  ? "border-[#4F46E5] text-[#4F46E5]"
+                  : "border-transparent text-[#6B7280] hover:text-[#111827]"
+              }`}
+            >
+              Grant Permissions
+            </button>
+            <button
+              onClick={() => setActiveTab("revoke")}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+                activeTab === "revoke"
+                  ? "border-[#4F46E5] text-[#4F46E5]"
+                  : "border-transparent text-[#6B7280] hover:text-[#111827]"
+              }`}
+            >
+              Revoke Permissions
+            </button>
+          </div>
+        </div>
+
+        <div className="p-6 max-h-[60vh] overflow-y-auto">
+          {/* Level Tab */}
+          {activeTab === "level" && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm text-[#111827] mb-2">Current Permission Level</label>
+                <div className="px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg">
+                  <div className="flex items-center gap-2 text-sm text-[#111827]">
+                    <Shield className="w-4 h-4 text-[#6B7280]" />
+                    Level {employee.permission_level} - {employee.level_name}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#111827] mb-2">
+                  New Permission Level <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={newPermissionLevel}
+                  onChange={(e) => setNewPermissionLevel(Number(e.target.value))}
+                  className="w-full px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                >
+                  <option value={1}>Level 1 - Employee</option>
+                  <option value={2}>Level 2 - HR</option>
+                  <option value={3}>Level 3 - Administrator</option>
+                </select>
+              </div>
+
+              <div className="bg-[#F9FAFB] rounded-lg p-4">
+                <p className="text-sm text-[#111827] font-medium mb-2">Permissions for Level {newPermissionLevel}:</p>
+                <div className="space-y-1">
+                  {levelPermissions.map((perm) => (
+                    <div key={perm} className="flex items-center gap-2 text-sm text-[#6B7280]">
+                      <CheckCircle className="w-4 h-4 text-[#22C55E]" />
+                      {perm}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Grant Tab */}
+          {activeTab === "grant" && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm text-[#111827] mb-2">Grant Additional Permission</label>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedPermission}
+                    onChange={(e) => setSelectedPermission(e.target.value)}
+                    className="flex-1 px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                  >
+                    <option value="">Select a permission</option>
+                    {availablePermissions.permissions
+                      .filter((p) => !effectivePermissions.includes(p))
+                      .map((perm) => (
+                        <option key={perm} value={perm}>
+                          {perm}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={handleGrantPermission}
+                    disabled={!selectedPermission || processing}
+                    className="px-6 py-3 bg-[#22C55E] text-white rounded-lg hover:bg-[#16A34A] transition disabled:opacity-50"
+                  >
+                    {processing ? "Granting..." : "Grant"}
+                  </button>
+                </div>
+              </div>
+
+              {customOverride.length > 0 && (
+                <div>
+                  <p className="text-sm text-[#111827] font-medium mb-2">Currently Granted Permissions:</p>
+                  <div className="space-y-2">
+                    {customOverride.map((perm) => (
+                      <div
+                        key={perm}
+                        className="flex items-center justify-between px-4 py-3 bg-[#DCFCE7] border border-green-200 rounded-lg"
+                      >
+                        <div className="flex items-center gap-2 text-sm text-[#111827]">
+                          <CheckCircle className="w-4 h-4 text-[#22C55E]" />
+                          {perm}
+                        </div>
+                        <button
+                          onClick={() => handleRemoveGranted(perm)}
+                          disabled={processing}
+                          className="p-1 text-[#EF4444] hover:bg-[#FEF2F2] rounded transition"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Revoke Tab */}
+          {activeTab === "revoke" && (
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm text-[#111827] mb-2">Revoke Permission</label>
+                <div className="flex gap-2">
+                  <select
+                    value={selectedPermission}
+                    onChange={(e) => setSelectedPermission(e.target.value)}
+                    className="flex-1 px-4 py-3 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                  >
+                    <option value="">Select a permission</option>
+                    {effectivePermissions
+                      .filter((p) => !revokedPermissions.includes(p))
+                      .map((perm) => (
+                        <option key={perm} value={perm}>
+                          {perm}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={handleRevokePermission}
+                    disabled={!selectedPermission || processing}
+                    className="px-6 py-3 bg-[#EF4444] text-white rounded-lg hover:bg-[#DC2626] transition disabled:opacity-50"
+                  >
+                    {processing ? "Revoking..." : "Revoke"}
+                  </button>
+                </div>
+              </div>
+
+              {revokedPermissions.length > 0 && (
+                <div>
+                  <p className="text-sm text-[#111827] font-medium mb-2">Currently Revoked Permissions:</p>
+                  <div className="space-y-2">
+                    {revokedPermissions.map((perm) => (
+                      <div
+                        key={perm}
+                        className="flex items-center justify-between px-4 py-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg"
+                      >
+                        <div className="flex items-center gap-2 text-sm text-[#111827]">
+                          <XCircle className="w-4 h-4 text-[#EF4444]" />
+                          {perm}
+                        </div>
+                        <button
+                          onClick={() => handleRemoveRevoked(perm)}
+                          disabled={processing}
+                          className="p-1 text-[#22C55E] hover:bg-[#DCFCE7] rounded transition"
+                        >
+                          <CheckCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Effective Permissions Summary */}
+          <div className="mt-6 pt-6 border-t border-[#E5E7EB]">
+            <p className="text-sm text-[#111827] font-medium mb-2">Effective Permissions ({effectivePermissions.length}):</p>
+            <div className="grid grid-cols-2 gap-2">
+              {effectivePermissions.map((perm) => (
+                <div key={perm} className="flex items-center gap-2 text-xs text-[#6B7280] px-3 py-2 bg-[#F9FAFB] rounded">
+                  <CheckCircle className="w-3 h-3 text-[#22C55E]" />
+                  {perm}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="sticky bottom-0 bg-white border-t border-[#E5E7EB] p-6 flex gap-3 rounded-b-xl">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 border border-[#E5E7EB] text-[#111827] rounded-lg hover:bg-[#F9FAFB] transition"
+          >
+            Close
+          </button>
+          {activeTab === "level" && (
+            <button
+              onClick={onUpdate}
+              disabled={newPermissionLevel === employee.permission_level || isProcessing}
+              className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition disabled:opacity-50"
+            >
+              {isProcessing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Updating...
+                </>
+              ) : (
+                <>
+                  <Shield className="w-4 h-4" />
+                  Update Level
+                </>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

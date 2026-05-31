@@ -208,6 +208,12 @@ export function AppSidebar() {
       permission: "access_admin_portal",
     },
     {
+      name: "Employee Permissions",
+      icon: Shield,
+      path: "/admin/permissions",
+      permission: "access_admin_portal",
+    },
+    {
       name: "Company Management",
       icon: Building2,
       path: "/admin/companies",

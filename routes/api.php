@@ -13,6 +13,7 @@ use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PerformanceEvaluationWorkflowController;
 use App\Http\Controllers\PerformanceReviewController;
 use App\Http\Controllers\EvaluationTemplateController;
+use App\Http\Controllers\PermissionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', function () {
@@ -162,5 +163,15 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/payroll/{payroll}', [PayrollController::class, 'show']);
         Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve']);
         Route::post('/payroll/{payroll}/reject', [PayrollController::class, 'reject']);
+    });
+
+    // Permission management (admin only)
+    Route::middleware('employee.permission:access_admin_portal')->group(function () {
+        Route::get('/permissions/available', [PermissionController::class, 'getAvailablePermissions']);
+        Route::patch('/employees/{employee}/permission-level', [PermissionController::class, 'updatePermissionLevel']);
+        Route::post('/employees/{employee}/permissions/grant', [PermissionController::class, 'grantPermission']);
+        Route::post('/employees/{employee}/permissions/revoke', [PermissionController::class, 'revokePermission']);
+        Route::delete('/employees/{employee}/permissions/granted/{permission}', [PermissionController::class, 'removeGrantedPermission']);
+        Route::delete('/employees/{employee}/permissions/revoked/{permission}', [PermissionController::class, 'removeRevokedPermission']);
     });
 });
