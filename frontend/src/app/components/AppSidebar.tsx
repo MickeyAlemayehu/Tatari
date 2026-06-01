@@ -8,8 +8,6 @@ import {
   Calendar,
   FileText,
   TrendingUp,
-  DollarSign,
-  Receipt,
   Bell,
   User,
   ChevronDown,
@@ -20,7 +18,7 @@ import {
   Building2,
   ClipboardList,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 
 interface NavigationItem {
@@ -28,30 +26,29 @@ interface NavigationItem {
   icon: any;
   path: string;
   permission: string;
+  alwaysVisible?: boolean;
   children?: NavigationItem[];
 }
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, hasPermission } = useAuth();
+  const { logout, hasPermission, portal } = useAuth();
   const [expandedSections, setExpandedSections] = useState<string[]>([
+    "my-leave",
+    "my-performance",
     "leave-management",
     "performance",
   ]);
 
-  // Detect role from URL path
-  const currentRole = location.pathname.startsWith("/employee/")
-    ? "employee"
-    : location.pathname.startsWith("/admin")
-    ? "admin"
-    : "hr";
+  const portalLabel = portal ?? "Workspace";
 
   const isActive = (path: string) => {
-    if (path.includes("/dashboard")) {
-      return location.pathname.includes("/dashboard");
+    if (path === "/dashboard") {
+      return location.pathname === "/dashboard";
     }
-    return location.pathname.startsWith(path) || location.pathname.includes(path);
+    const cleanPath = path.split("?")[0];
+    return location.pathname === cleanPath || location.pathname.startsWith(`${cleanPath}/`);
   };
 
   const toggleSection = (sectionName: string) => {
@@ -69,13 +66,16 @@ export function AppSidebar() {
     return isActive(item.path);
   };
 
-  // EMPLOYEE NAVIGATION
-  const employeeNavigation: NavigationItem[] = [
+  // Single permission-gated navigation. Each item shows when the user holds
+  // the listed permission. `alwaysVisible: true` skips the gate entirely
+  // (Dashboard). Items ordered: shared/self-service → HR management → admin.
+  const navigation: NavigationItem[] = [
     {
       name: "Dashboard",
       icon: Home,
-      path: "/employee/dashboard",
+      path: "/dashboard",
       permission: "access_employee_portal",
+      alwaysVisible: true,
     },
     {
       name: "My Profile",
@@ -90,7 +90,7 @@ export function AppSidebar() {
       permission: "access_employee_portal",
     },
     {
-      name: "Leave Management",
+      name: "My Leave",
       icon: Calendar,
       path: "/employee/leave",
       permission: "access_employee_portal",
@@ -100,7 +100,7 @@ export function AppSidebar() {
       ],
     },
     {
-      name: "Performance",
+      name: "My Performance",
       icon: TrendingUp,
       path: "/employee/performance",
       permission: "access_employee_portal",
@@ -108,22 +108,6 @@ export function AppSidebar() {
         { name: "My Tasks", icon: ClipboardList, path: "/employee/performance?tab=tasks", permission: "access_employee_portal" },
         { name: "My Results", icon: TrendingUp, path: "/employee/performance?tab=results", permission: "access_employee_portal" },
       ],
-    },
-    {
-      name: "Notifications",
-      icon: Bell,
-      path: "/employee/notifications",
-      permission: "access_employee_portal",
-    },
-  ];
-
-  // HR NAVIGATION
-  const hrNavigation: NavigationItem[] = [
-    {
-      name: "Dashboard",
-      icon: Home,
-      path: "/hr/dashboard",
-      permission: "access_hr_portal",
     },
     {
       name: "Employee Management",
@@ -140,25 +124,25 @@ export function AppSidebar() {
       name: "Departments",
       icon: Briefcase,
       path: "/departments",
-      permission: "manage_employees",
+      permission: "manage_departments",
     },
     {
       name: "Leave Management",
       icon: Calendar,
       path: "/leave",
-      permission: "approve_leave",
+      permission: "manage_leave",
       children: [
-        { name: "All Requests", icon: FileText, path: "/leave?tab=history", permission: "approve_leave" },
-        { name: "Approval", icon: Calendar, path: "/leave?tab=approvals", permission: "approve_leave" },
+        { name: "All Requests", icon: FileText, path: "/leave?tab=history", permission: "manage_leave" },
+        { name: "Approval", icon: Calendar, path: "/leave?tab=approvals", permission: "manage_leave" },
       ],
     },
     {
       name: "Performance",
       icon: TrendingUp,
       path: "/performance",
-      permission: "manage_performance_reviews",
+      permission: "manage_performance",
       children: [
-        { name: "Evaluation Dashboard", icon: TrendingUp, path: "/performance", permission: "manage_performance_reviews" },
+        { name: "Evaluation Dashboard", icon: TrendingUp, path: "/performance", permission: "manage_performance" },
         { name: "Assign Evaluators", icon: Users, path: "/performance/assign-peers", permission: "performance_create" },
       ],
     },
@@ -166,28 +150,11 @@ export function AppSidebar() {
       name: "Recruitment",
       icon: Briefcase,
       path: "/jobs",
-      permission: "manage_employees",
+      permission: "manage_recruitment",
       children: [
-        { name: "Job Vacancies", icon: Briefcase, path: "/jobs", permission: "manage_employees" },
-        { name: "Applicants", icon: Users, path: "/applicants", permission: "manage_employees" },
+        { name: "Job Vacancies", icon: Briefcase, path: "/jobs", permission: "manage_recruitment" },
+        { name: "Applicants", icon: Users, path: "/applicants", permission: "manage_recruitment" },
       ],
-    },
-
-    {
-      name: "Notifications",
-      icon: Bell,
-      path: "/notifications",
-      permission: "access_employee_portal",
-    },
-  ];
-
-  // ADMIN NAVIGATION
-  const adminNavigation: NavigationItem[] = [
-    {
-      name: "Dashboard",
-      icon: Home,
-      path: "/admin/dashboard",
-      permission: "access_admin_portal",
     },
     {
       name: "Employee Permissions",
@@ -201,7 +168,6 @@ export function AppSidebar() {
       path: "/admin/companies",
       permission: "access_admin_portal",
     },
-
     {
       name: "System Settings",
       icon: Settings,
@@ -214,18 +180,16 @@ export function AppSidebar() {
       path: "/admin/logs",
       permission: "access_admin_portal",
     },
+    {
+      name: "Notifications",
+      icon: Bell,
+      path: "/notifications",
+      permission: "access_employee_portal",
+    },
   ];
 
-  // Select navigation based on current role
-  const navigation =
-    currentRole === "employee"
-      ? employeeNavigation
-      : currentRole === "admin"
-      ? adminNavigation
-      : hrNavigation;
-
   const permittedNavigation = navigation
-    .filter((item) => hasPermission(item.permission))
+    .filter((item) => item.alwaysVisible || hasPermission(item.permission))
     .map((item): NavigationItem => {
       const children = item.children?.filter((child) => hasPermission(child.permission));
       return children ? { ...item, children } : { ...item };
@@ -240,18 +204,15 @@ export function AppSidebar() {
     const Icon = item.icon;
     const active = isActive(item.path);
     const hasChildren = item.children && item.children.length > 0;
-    const isExpanded = expandedSections.includes(
-      item.name.toLowerCase().replace(/\s+/g, "-")
-    );
+    const sectionKey = item.name.toLowerCase().replace(/\s+/g, "-");
+    const isExpanded = expandedSections.includes(sectionKey);
     const sectionActive = isSectionActive(item);
 
     if (hasChildren && item.children && item.children.length > 0) {
       return (
         <div key={item.path}>
           <button
-            onClick={() =>
-              toggleSection(item.name.toLowerCase().replace(/\s+/g, "-"))
-            }
+            onClick={() => toggleSection(sectionKey)}
             className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition ${
               sectionActive
                 ? "bg-[rgba(255,255,255,0.08)] text-[#E5E7EB]"
@@ -297,20 +258,17 @@ export function AppSidebar() {
 
   return (
     <aside className="hidden lg:flex w-64 bg-[#111827] border-r border-[rgba(255,255,255,0.1)] flex-col h-full fixed left-0 top-0 bottom-0">
-      {/* Logo/Brand */}
       <div className="px-6 py-5 border-b border-[rgba(255,255,255,0.1)] flex-shrink-0">
         <h2 className="text-base text-[#E5E7EB] font-semibold">HR System</h2>
-        <p className="text-xs text-[#6B7280] mt-1 capitalize">{currentRole} Portal</p>
+        <p className="text-xs text-[#6B7280] mt-1 capitalize">{portalLabel} Portal</p>
       </div>
 
-      {/* Main Navigation */}
       <nav className="flex-1 px-4 py-6 overflow-y-auto">
         <div className="space-y-1">
           {permittedNavigation.map((item) => renderNavItem(item))}
         </div>
 
-        {/* Settings for Employee */}
-        {currentRole === "employee" && hasPermission("access_employee_portal") && (
+        {hasPermission("access_employee_portal") && (
           <div className="mt-8 pt-6 border-t border-[rgba(255,255,255,0.1)]">
             <button
               onClick={() => navigate("/employee/settings")}
@@ -327,7 +285,6 @@ export function AppSidebar() {
         )}
       </nav>
 
-      {/* Bottom Navigation - Logout */}
       <div className="border-t border-[rgba(255,255,255,0.1)] px-4 py-4 flex-shrink-0">
         <button
           onClick={handleLogout}

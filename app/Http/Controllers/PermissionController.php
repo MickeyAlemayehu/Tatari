@@ -221,6 +221,16 @@ class PermissionController extends Controller
             $allPermissions = array_merge($allPermissions, $permissions);
         }
 
+        // Surface fine-grained sidebar permissions as grantable even if no
+        // role config lists them (defensive: future-proofs against config drift).
+        $allPermissions = array_merge($allPermissions, [
+            'manage_employees',
+            'manage_departments',
+            'manage_leave',
+            'manage_performance',
+            'manage_recruitment',
+        ]);
+
         $allPermissions = array_values(array_unique($allPermissions));
 
         return response()->json([

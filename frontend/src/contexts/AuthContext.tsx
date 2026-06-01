@@ -10,6 +10,7 @@ import {
 } from "react";
 import { ApiError } from "../lib/api";
 import { canAccessPortal, getDefaultDashboard } from "../lib/portal-access";
+import { hasDashboardPermission } from "../lib/dashboard-permissions";
 import {
   clearSession,
   getStoredPortal,
@@ -165,7 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const permissionLevel = employee?.permission_level ?? null;
   const landingPath = employee ? getDefaultDashboard(employee) : "/login";
   const hasPermission = useCallback(
-    (permission: string) => effectivePermissions.includes(permission),
+    (permission: string) => hasDashboardPermission(effectivePermissions, permission),
     [effectivePermissions]
   );
 

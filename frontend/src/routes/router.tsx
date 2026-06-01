@@ -5,9 +5,7 @@ import { ForceChangePassword } from "../app/pages/ForceChangePassword";
 import { EmployeeLogin } from "../app/pages/EmployeeLogin";
 import { HRLogin } from "../app/pages/HRLogin";
 import { AdminLogin } from "../app/pages/AdminLogin";
-import { Dashboard } from "../app/pages/Dashboard";
-import { EmployeeDashboard } from "../app/pages/EmployeeDashboard";
-import { HRDashboard } from "../app/pages/HRDashboard";
+import { UnifiedDashboard } from "../app/pages/UnifiedDashboard";
 import { MyProfile } from "../app/pages/MyProfile";
 import { MyDepartment } from "../app/pages/MyDepartment";
 import { EmployeeSettings } from "../app/pages/EmployeeSettings";
@@ -50,7 +48,7 @@ import { AuditLogs } from "../app/pages/AuditLogs";
 import { Help } from "../app/pages/Help";
 import { Profile } from "../app/pages/Profile";
 import { NotFound } from "../app/pages/NotFound";
-import { admin, authenticated, employee, hr, permitted } from "./guards";
+import { admin, authenticated, employee, permitted } from "./guards";
 
 export const router = createBrowserRouter([
   { path: "/", element: <Navigate to="/login" replace /> },
@@ -65,7 +63,8 @@ export const router = createBrowserRouter([
   { path: "/careers/:id/apply", element: <PublicJobApplication /> },
   { path: "/help", element: <Help /> },
 
-  { path: "/employee/dashboard", element: employee(<EmployeeDashboard />) },
+  { path: "/dashboard", element: authenticated(<UnifiedDashboard />) },
+  { path: "/employee/dashboard", element: <Navigate to="/dashboard" replace /> },
   { path: "/employee/profile", element: employee(<MyProfile />) },
   { path: "/employee/department", element: employee(<MyDepartment />) },
   { path: "/employee/leave", element: employee(<EmployeeLeaveManagement />) },
@@ -76,8 +75,8 @@ export const router = createBrowserRouter([
   { path: "/employee/notifications", element: employee(<Notifications />) },
   { path: "/employee/settings", element: employee(<EmployeeSettings />) },
 
-  { path: "/hr/dashboard", element: hr(<HRDashboard />) },
-  { path: "/admin/dashboard", element: admin(<Dashboard />) },
+  { path: "/hr/dashboard", element: <Navigate to="/dashboard" replace /> },
+  { path: "/admin/dashboard", element: <Navigate to="/dashboard" replace /> },
 
   { path: "/profile", element: authenticated(<Profile />) },
   { path: "/notifications", element: authenticated(<Notifications />) },

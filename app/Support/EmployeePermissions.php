@@ -65,6 +65,10 @@ class EmployeePermissions
         return $level;
     }
 
+    /**
+     * Strict formula: role_defaults + individually_granted - individually_revoked.
+     * No aliasing, no implicit grants, no cross-permission expansion.
+     */
     public static function effectivePermissions(Employee $employee): array
     {
         $level = self::normalizeLevel((int) $employee->permission_level);

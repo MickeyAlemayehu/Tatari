@@ -258,7 +258,7 @@ export function EmployeeProfile() {
           <div className="mb-6">
             <div className="flex items-center gap-2 text-sm text-[#6B7280]">
               <button
-                onClick={() => navigate("/hr/dashboard")}
+                onClick={() => navigate("/dashboard")}
                 className="hover:text-[#4F46E5] transition"
               >
                 Dashboard
