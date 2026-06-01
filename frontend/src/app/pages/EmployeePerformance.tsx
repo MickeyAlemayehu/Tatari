@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
-import { performanceService, type EvaluationAssignmentRecord } from "../../services/performance.service";
+import { performanceService, type EvaluationAssignmentRecord, type PerformanceSummaryRecord } from "../../services/performance.service";
 import { ApiError } from "../../lib/api";
 
 type TabType = "tasks" | "results";
@@ -390,44 +390,24 @@ function MyTasksTab({
 // My Results Tab
 function MyResultsTab() {
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [myResult, setMyResult] = useState<PerformanceSummaryRecord | null>(null);
 
-  // Employee's own performance results
-  const myResults = {
-    finalScore: 4.2,
-    selfScore: 4.0,
-    peerScore: 4.3,
-    managerScore: 4.3,
-    reviewPeriod: "Q1 2026",
-    status: "completed",
-  };
-
-  const categoryScores = [
-    { category: "Goals & Objectives", score: 4.3 },
-    { category: "Core Competencies", score: 3.8 },
-    { category: "Leadership", score: 4.3 },
-    { category: "Collaboration", score: 4.3 },
-  ];
-
-  const feedback = [
-    {
-      from: "Self Evaluation",
-      type: "self",
-      comment:
-        "Successfully launched three major marketing campaigns this quarter with excellent results. Would like to develop more advanced data analytics skills.",
-    },
-    {
-      from: "Peer Feedback (2 reviews)",
-      type: "peer",
-      comment:
-        "Exceptional collaborator who brings creative ideas to every project. Outstanding communication skills. Could benefit from more technical knowledge in automation tools.",
-    },
-    {
-      from: "Manager Feedback",
-      type: "manager",
-      comment:
-        "Exceptional performance this quarter. Consistently exceeding targets and delivering high-quality work. Ready for more responsibility. Recommend advanced analytics training.",
-    },
-  ];
+  useEffect(() => {
+    performanceService
+      .myResults()
+      .then((res) => {
+        if (res.data && res.data.length > 0) {
+          // The endpoint returns results sorted by latest calculated_at
+          setMyResult(res.data[0]);
+        }
+      })
+      .catch((err) =>
+        setError(err instanceof ApiError ? err.message : "Failed to load performance results.")
+      )
+      .finally(() => setLoading(false));
+  }, []);
 
   const getRatingLabel = (score: number) => {
     if (score >= 4.5) return "Exceptional";
@@ -437,21 +417,37 @@ function MyResultsTab() {
     return "Unsatisfactory";
   };
 
-  const getRatingColor = (score: number) => {
-    if (score >= 4.5) return "text-[#4F46E5]";
-    if (score >= 4.0) return "text-[#22C55E]";
-    if (score >= 3.5) return "text-blue-600";
-    if (score >= 3.0) return "text-[#F59E0B]";
-    return "text-[#EF4444]";
-  };
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#4F46E5]"></div>
+      </div>
+    );
+  }
 
-  const getScoreBg = (score: number) => {
-    if (score >= 4.5) return "bg-[#EEF2FF]";
-    if (score >= 4.0) return "bg-[#DCFCE7]";
-    if (score >= 3.5) return "bg-blue-50";
-    if (score >= 3.0) return "bg-[#FFFBEB]";
-    return "bg-[#FEF2F2]";
-  };
+  if (error) {
+    return (
+      <div className="p-6">
+        <div className="p-4 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg text-[#EF4444]">
+          {error}
+        </div>
+      </div>
+    );
+  }
+
+  if (!myResult) {
+    return (
+      <div className="p-6">
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-12 text-center">
+          <Award className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <h3 className="text-base text-[#111827] mb-2">No Performance Results</h3>
+          <p className="text-sm text-[#6B7280]">
+            You do not have any finalized performance results at this time.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -461,9 +457,9 @@ function MyResultsTab() {
           <div className="inline-flex items-center justify-center w-20 h-20 bg-white/20 backdrop-blur-sm rounded-full mb-4">
             <Award className="w-10 h-10 text-white" />
           </div>
-          <h2 className="text-sm opacity-75 mb-2">My Performance Score - {myResults.reviewPeriod}</h2>
-          <div className="text-6xl mb-3">{myResults.finalScore.toFixed(1)}</div>
-          <div className="text-lg opacity-90">{getRatingLabel(myResults.finalScore)}</div>
+          <h2 className="text-sm opacity-75 mb-2">My Performance Score - {myResult.period || "Current"}</h2>
+          <div className="text-6xl mb-3">{myResult.finalScore.toFixed(1)}</div>
+          <div className="text-lg opacity-90">{getRatingLabel(myResult.finalScore)}</div>
         </div>
       </div>
 
@@ -480,11 +476,11 @@ function MyResultsTab() {
               <p className="text-xs text-[#6B7280]">Your assessment</p>
             </div>
           </div>
-          <div className="text-3xl text-[#111827] mb-2">{myResults.selfScore.toFixed(1)}</div>
+          <div className="text-3xl text-[#111827] mb-2">{myResult.selfScore.toFixed(1)}</div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-blue-600 h-2 rounded-full transition-all"
-              style={{ width: `${(myResults.selfScore / 5) * 100}%` }}
+              style={{ width: `${(myResult.selfScore / 5) * 100}%` }}
             />
           </div>
         </div>
@@ -497,14 +493,14 @@ function MyResultsTab() {
             </div>
             <div>
               <h3 className="text-sm text-[#111827]">Peer Average</h3>
-              <p className="text-xs text-[#6B7280]">2 peer reviews</p>
+              <p className="text-xs text-[#6B7280]">Peer reviews</p>
             </div>
           </div>
-          <div className="text-3xl text-[#111827] mb-2">{myResults.peerScore.toFixed(1)}</div>
+          <div className="text-3xl text-[#111827] mb-2">{myResult.peerScore.toFixed(1)}</div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-[#22C55E] h-2 rounded-full transition-all"
-              style={{ width: `${(myResults.peerScore / 5) * 100}%` }}
+              style={{ width: `${(myResult.peerScore / 5) * 100}%` }}
             />
           </div>
         </div>
@@ -520,65 +516,30 @@ function MyResultsTab() {
               <p className="text-xs text-[#6B7280]">Direct supervisor</p>
             </div>
           </div>
-          <div className="text-3xl text-[#111827] mb-2">{myResults.managerScore.toFixed(1)}</div>
+          <div className="text-3xl text-[#111827] mb-2">{myResult.managerScore.toFixed(1)}</div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
               className="bg-[#4F46E5] h-2 rounded-full transition-all"
-              style={{ width: `${(myResults.managerScore / 5) * 100}%` }}
+              style={{ width: `${(myResult.managerScore / 5) * 100}%` }}
             />
           </div>
         </div>
       </div>
 
-      {/* Category Scores */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
-        <h2 className="text-sm text-[#111827] mb-4">Performance by Category</h2>
-        <div className="space-y-4">
-          {categoryScores.map((category, index) => (
-            <div key={index}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-[#111827]">{category.category}</span>
-                <span
-                  className={`text-sm px-3 py-1 rounded-full ${getScoreBg(
-                    category.score
-                  )} ${getRatingColor(category.score)}`}
-                >
-                  {category.score.toFixed(1)}
-                </span>
+      {/* Feedback Summary */}
+      {myResult.feedback && myResult.feedback.length > 0 && (
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+          <h2 className="text-sm text-[#111827] mb-4">Feedback Summary</h2>
+          <div className="space-y-4">
+            {myResult.feedback.map((item, index) => (
+              <div key={index} className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
+                <h3 className="text-sm text-[#111827] mb-2">{item.from}</h3>
+                <p className="text-sm text-[#6B7280] leading-relaxed">{item.comment}</p>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div
-                  className="bg-gradient-to-r from-[#4F46E5] to-[#4338CA] h-2 rounded-full transition-all"
-                  style={{ width: `${(category.score / 5) * 100}%` }}
-                />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
-      </div>
-
-      {/* Feedback */}
-      <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
-        <h2 className="text-sm text-[#111827] mb-4">Feedback Summary</h2>
-        <div className="space-y-4">
-          {feedback.map((item, index) => (
-            <div key={index} className="p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]">
-              <h3 className="text-sm text-[#111827] mb-2">{item.from}</h3>
-              <p className="text-sm text-[#6B7280] leading-relaxed">{item.comment}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* View Full Details Button */}
-      <div className="flex justify-center">
-        <button
-          onClick={() => navigate("/employee/performance/results/1")}
-          className="px-6 py-3 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
-        >
-          View Full Performance Report
-        </button>
-      </div>
+      )}
     </div>
   );
 }

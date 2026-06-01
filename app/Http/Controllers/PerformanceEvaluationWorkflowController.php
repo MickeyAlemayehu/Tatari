@@ -12,6 +12,7 @@ use App\Models\EvaluationTemplate;
 use App\Models\PerformanceEvaluation;
 use App\Models\PerformanceSummary;
 use App\Services\SelfEvaluationAutoAssigner;
+use App\Services\EvaluationScoreService;
 use App\Events\EvaluatorsAssigned;
 use App\Events\EvaluationSubmitted;
 use App\Events\EvaluationPeriodActivated;
@@ -406,7 +407,7 @@ class PerformanceEvaluationWorkflowController extends Controller
         ]);
     }
 
-    public function submitEvaluation(Request $request, EvaluationAssignment $assignment): JsonResponse
+    public function submitEvaluation(Request $request, EvaluationAssignment $assignment, EvaluationScoreService $scoreService): JsonResponse
     {
         $evaluator = $request->user('api') ?? $request->user();
 
@@ -419,16 +420,29 @@ class PerformanceEvaluationWorkflowController extends Controller
             'rating' => ['nullable', 'numeric', 'between:1,5'],
             'comments' => ['nullable', 'string'],
             'answers' => ['nullable', 'array'],
-            'answers.*.question_id' => ['sometimes', 'integer'],
-            'answers.*.rating' => ['sometimes', 'numeric'],
-            'answers.*.text_answer' => ['sometimes', 'string'],
-            'answers.*.text' => ['sometimes', 'string'],
-            'answers.*.selected_options' => ['sometimes', 'array'],
+            'answers.*.question_id' => ['required_with:answers.*', 'integer'],
+            'answers.*.rating' => ['sometimes', 'nullable', 'numeric'],
+            'answers.*.text_answer' => ['sometimes', 'nullable', 'string'],
+            'answers.*.text' => ['sometimes', 'nullable', 'string'],
+            'answers.*.selected_options' => ['sometimes', 'nullable', 'array'],
+            'answers.*.selected_options.*' => ['integer'],
         ]);
 
-        $score = $data['score'] ?? $data['rating'] ?? $this->scoreFromAnswers($data['answers'] ?? []);
+        $answers = $data['answers'] ?? [];
 
-        if (! $score) {
+        // Load the questions that belong to this assignment's template (with
+        // options) so the scoring engine has both weights and option values.
+        $questions = $assignment->template_id
+            ? EvaluationQuestion::with('options')->where('template_id', $assignment->template_id)->get()
+            : collect();
+
+        $serviceScore = $scoreService->calculate($answers, $questions);
+
+        $score = $data['score']
+            ?? $data['rating']
+            ?? $serviceScore;
+
+        if ($score === null) {
             return response()->json(['message' => 'Score or rating answers are required.'], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
@@ -438,16 +452,19 @@ class PerformanceEvaluationWorkflowController extends Controller
                 'evaluator_id' => $assignment->evaluator_id,
                 'employee_id' => $assignment->employee_id,
                 'evaluation_period_id' => $assignment->evaluation_period_id,
+                // Score is a snapshot — frozen at submission time. Future edits
+                // to question weights or option values do not change historical
+                // results because we persist the computed number here.
                 'score' => $score,
-                'comments' => $data['comments'] ?? json_encode($data['answers'] ?? []),
+                'comments' => $data['comments'] ?? json_encode($answers),
                 'submitted_at' => now(),
                 'status' => 'submitted',
             ]
         );
 
         // Persist individual answers when question_id is provided
-        if (! empty($data['answers'])) {
-            foreach ($data['answers'] as $ans) {
+        if (! empty($answers)) {
+            foreach ($answers as $ans) {
                 if (! empty($ans['question_id'])) {
                     EvaluationAnswer::updateOrCreate(
                         [
@@ -587,7 +604,38 @@ class PerformanceEvaluationWorkflowController extends Controller
                 ->where('employee_id', $employee->id)
                 ->latest('calculated_at')
                 ->get()
-                ->map(fn (PerformanceSummary $summary) => $this->summaryPayload($summary)),
+                ->map(function (PerformanceSummary $summary) {
+                    $payload = $this->summaryPayload($summary);
+                    
+                    // Fetch evaluations for feedback
+                    $evaluations = PerformanceEvaluation::query()
+                        ->where('employee_id', $summary->employee_id)
+                        ->where('evaluation_period_id', $summary->evaluation_period_id)
+                        ->whereNotNull('comments')
+                        ->with('assignment')
+                        ->get();
+                        
+                    $feedback = [];
+                    foreach ($evaluations as $eval) {
+                        $type = $eval->assignment?->evaluator_type;
+                        if ($type && $eval->comments) {
+                            $from = match ($type) {
+                                'self' => 'Self Evaluation',
+                                'manager' => 'Manager Feedback',
+                                'peer' => 'Peer Feedback',
+                                default => 'Feedback'
+                            };
+                            $feedback[] = [
+                                'from' => $from,
+                                'type' => $type,
+                                'comment' => $eval->comments,
+                            ];
+                        }
+                    }
+                    
+                    $payload['feedback'] = $feedback;
+                    return $payload;
+                }),
         ]);
     }
 
@@ -674,6 +722,11 @@ class PerformanceEvaluationWorkflowController extends Controller
         );
     }
 
+    /**
+     * @deprecated Use EvaluationScoreService::calculate() — kept only as a
+     * fallback callsite. Will be removed once all callers route through the
+     * service.
+     */
     private function scoreFromAnswers(array $answers): ?float
     {
         $ratings = collect($answers)->pluck('rating')->filter(fn ($rating) => is_numeric($rating));

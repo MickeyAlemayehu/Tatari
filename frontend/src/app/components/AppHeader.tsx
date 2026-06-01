@@ -68,7 +68,7 @@ export function AppHeader({
 
           {/* User Profile */}
           <button
-            onClick={() => navigate("/profile")}
+            onClick={() => navigate("/employee/profile")}
             className="flex items-center gap-2 p-1.5 hover:bg-[#F9FAFB] rounded-lg transition"
           >
             <div className="w-8 h-8 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center text-white text-sm">

@@ -33,7 +33,14 @@ import {
 import { ApiError } from "../../lib/api";
 
 type EvalType = "self" | "peer" | "manager";
-type QuestionType = "rating" | "text" | "textarea" | "multiple_choice" | "yes_no" | "numeric";
+type QuestionType =
+  | "rating"
+  | "text"
+  | "textarea"
+  | "multiple_choice"
+  | "checkbox"
+  | "yes_no"
+  | "numeric";
 
 const EVAL_TYPE_LABELS: Record<EvalType, string> = {
   self: "Self",
@@ -77,6 +84,7 @@ interface QuestionFormState {
   category: string;
   required: boolean;
   weight: number;
+  options: { label: string; value: number }[];
 }
 
 const emptyQuestionForm = (): QuestionFormState => ({
@@ -85,7 +93,10 @@ const emptyQuestionForm = (): QuestionFormState => ({
   category: "",
   required: true,
   weight: 1,
+  options: [],
 });
+
+const isSelectableType = (t: string) => t === "multiple_choice" || t === "checkbox";
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -249,6 +260,12 @@ export function EvaluationBuilder() {
 
     setQuestionSaving(true);
     try {
+      const optionsPayload = isSelectableType(questionForm.type)
+        ? questionForm.options
+            .filter((o) => o.label.trim().length > 0)
+            .map((o) => ({ label: o.label.trim(), value: o.value }))
+        : undefined;
+
       if (editingQuestion) {
         const updated = await performanceService.updateQuestion(editingQuestion.id, {
           text: questionForm.text.trim(),
@@ -256,6 +273,7 @@ export function EvaluationBuilder() {
           category: questionForm.category.trim(),
           required: questionForm.required,
           weight: questionForm.weight,
+          ...(optionsPayload ? { options: optionsPayload } : {}),
         });
         setQuestions((prev) => prev.map((q) => (q.id === editingQuestion.id ? updated : q)));
         flash("Question updated.");
@@ -267,6 +285,7 @@ export function EvaluationBuilder() {
           category: questionForm.category.trim(),
           required: questionForm.required,
           weight: questionForm.weight,
+          ...(optionsPayload ? { options: optionsPayload } : {}),
         });
         setQuestions((prev) => [...prev, created]);
         // Update questionCount on template
@@ -298,6 +317,7 @@ export function EvaluationBuilder() {
       category: q.category,
       required: q.required,
       weight: q.weight ?? 1,
+      options: (q.options ?? []).map((o) => ({ label: o.label, value: o.value })),
     });
     setShowQuestionForm(true);
   };
@@ -690,6 +710,8 @@ export function EvaluationBuilder() {
                             <option value="rating">Rating (1–5)</option>
                             <option value="text">Short Text</option>
                             <option value="textarea">Long Text</option>
+                            <option value="multiple_choice">Multiple Choice (single)</option>
+                            <option value="checkbox">Checkbox (multi-select)</option>
                             <option value="yes_no">Yes / No</option>
                             <option value="numeric">Numeric</option>
                           </select>
@@ -723,18 +745,118 @@ export function EvaluationBuilder() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="required"
-                          checked={questionForm.required}
-                          onChange={(e) => setQuestionForm({ ...questionForm, required: e.target.checked })}
-                          className="w-4 h-4 text-[#4F46E5] rounded"
-                        />
-                        <label htmlFor="required" className="text-sm text-[#6B7280]">
-                          This question is required
-                        </label>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm text-[#111827] mb-1">
+                            Weight
+                          </label>
+                          <input
+                            type="number"
+                            min="0.01"
+                            step="0.1"
+                            value={questionForm.weight}
+                            onChange={(e) =>
+                              setQuestionForm({
+                                ...questionForm,
+                                weight: Math.max(0.01, Number(e.target.value) || 1),
+                              })
+                            }
+                            className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
+                          />
+                          <p className="text-xs text-[#6B7280] mt-1">
+                            Relative weight in the final score. Default 1.
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 pt-7">
+                          <input
+                            type="checkbox"
+                            id="required"
+                            checked={questionForm.required}
+                            onChange={(e) =>
+                              setQuestionForm({ ...questionForm, required: e.target.checked })
+                            }
+                            className="w-4 h-4 text-[#4F46E5] rounded"
+                          />
+                          <label htmlFor="required" className="text-sm text-[#6B7280]">
+                            This question is required
+                          </label>
+                        </div>
                       </div>
+
+                      {isSelectableType(questionForm.type) && (
+                        <div className="border border-[#E5E7EB] rounded-lg p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm text-[#111827]">
+                              Options (label + score value)
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setQuestionForm({
+                                  ...questionForm,
+                                  options: [...questionForm.options, { label: "", value: 0 }],
+                                })
+                              }
+                              className="text-sm text-[#4F46E5] hover:underline"
+                            >
+                              + Add option
+                            </button>
+                          </div>
+                          {questionForm.options.length === 0 && (
+                            <p className="text-xs text-[#6B7280]">
+                              No options yet. Add at least one to make this question scorable.
+                            </p>
+                          )}
+                          {questionForm.options.map((opt, idx) => (
+                            <div key={idx} className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="Option label"
+                                value={opt.label}
+                                onChange={(e) =>
+                                  setQuestionForm({
+                                    ...questionForm,
+                                    options: questionForm.options.map((o, i) =>
+                                      i === idx ? { label: e.target.value, value: o.value } : o
+                                    ),
+                                  })
+                                }
+                                className="flex-1 px-3 py-2 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                              />
+                              <input
+                                type="number"
+                                step="0.1"
+                                placeholder="Value"
+                                value={opt.value}
+                                onChange={(e) =>
+                                  setQuestionForm({
+                                    ...questionForm,
+                                    options: questionForm.options.map((o, i) =>
+                                      i === idx
+                                        ? { label: o.label, value: Number(e.target.value) || 0 }
+                                        : o
+                                    ),
+                                  })
+                                }
+                                className="w-24 px-3 py-2 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#4F46E5]"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setQuestionForm({
+                                    ...questionForm,
+                                    options: questionForm.options.filter((_, i) => i !== idx),
+                                  })
+                                }
+                                className="p-2 text-[#6B7280] hover:text-[#EF4444]"
+                                aria-label="Remove option"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
 
                       <div className="flex justify-end gap-3 pt-2">
                         <button

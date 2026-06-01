@@ -57,6 +57,7 @@ export interface PerformanceSummaryRecord {
   managerScore: number;
   finalScore: number;
   status: string;
+  feedback?: { from: string; type: string; comment: string }[];
 }
 
 // ── Template & Question types ──────────────────────────

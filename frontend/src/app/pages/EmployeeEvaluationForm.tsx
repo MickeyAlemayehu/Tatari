@@ -21,6 +21,7 @@ import {
 } from "../../services/performance.service";
 import { ApiError } from "../../lib/api";
 import { buildEvaluationPayload } from "../../lib/evaluation-submit";
+import { calculatePreviewScore } from "../../lib/evaluation-score";
 import { findAssignment } from "../../lib/evaluation-helpers";
 import { useActionSound } from "../hooks/useActionSound";
 
@@ -28,6 +29,7 @@ interface Answer {
   questionId: number;
   rating?: number;
   text?: string;
+  selectedOptions?: number[];
 }
 
 // Fallback questions used when no template is linked to the period. The
@@ -184,7 +186,16 @@ export function EmployeeEvaluationForm() {
         } else if (q.type === "rating" && !answer.rating) {
           newErrors[q.id] = "Please provide a rating";
           isValid = false;
-        } else if (q.type === "text" && (!answer.text || answer.text.trim().length < 10)) {
+        } else if (
+          (q.type === "multiple_choice" || q.type === "checkbox") &&
+          (!answer.selectedOptions || answer.selectedOptions.length === 0)
+        ) {
+          newErrors[q.id] = "Please select at least one option";
+          isValid = false;
+        } else if (
+          (q.type === "text" || q.type === "textarea") &&
+          (!answer.text || answer.text.trim().length < 10)
+        ) {
           newErrors[q.id] = "Please provide at least 10 characters";
           isValid = false;
         }
@@ -194,6 +205,50 @@ export function EmployeeEvaluationForm() {
     setErrors(newErrors);
     return isValid;
   };
+
+  const handleOptionsChange = (
+    questionId: number,
+    optionId: number,
+    isMulti: boolean,
+    checked: boolean
+  ) => {
+    setAnswers((prev) => {
+      const existing = prev.find((a) => a.questionId === questionId);
+      const current = existing?.selectedOptions ?? [];
+      let next: number[];
+      if (isMulti) {
+        next = checked ? [...current, optionId] : current.filter((id) => id !== optionId);
+      } else {
+        next = checked ? [optionId] : [];
+      }
+      if (existing) {
+        return prev.map((a) =>
+          a.questionId === questionId ? { ...a, selectedOptions: next } : a
+        );
+      }
+      return [...prev, { questionId, selectedOptions: next }];
+    });
+    if (errors[questionId]) {
+      const e = { ...errors };
+      delete e[questionId];
+      setErrors(e);
+    }
+  };
+
+  const previewScore = calculatePreviewScore(
+    answers
+      .filter((a) => a.questionId > 0)
+      .map((a) => ({
+        question_id: a.questionId,
+        rating: a.rating ?? null,
+        selected_options: a.selectedOptions ?? null,
+      })),
+    questions.map((q) => ({
+      id: q.id,
+      weight: q.weight ?? 1,
+      options: q.options ?? [],
+    }))
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -206,7 +261,6 @@ export function EmployeeEvaluationForm() {
       const payload = buildEvaluationPayload(answers);
       await performanceService.submitEvaluation(Number(id), {
         answers: payload.answers,
-        ...(payload.score    !== undefined ? { score: payload.score }       : {}),
         ...(payload.comments !== undefined ? { comments: payload.comments } : {}),
       });
       playSendSound();
@@ -344,6 +398,43 @@ export function EmployeeEvaluationForm() {
                           </div>
                         )}
                       </div>
+                    ) : question.type === "multiple_choice" || question.type === "checkbox" ? (
+                      <div>
+                        <div className="space-y-2">
+                          {(question.options ?? []).map((opt) => {
+                            const isMulti = question.type === "checkbox";
+                            const answer = answers.find((a) => a.questionId === question.id);
+                            const selected = answer?.selectedOptions ?? [];
+                            const isChecked = selected.includes(opt.id);
+                            return (
+                              <label
+                                key={opt.id}
+                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${
+                                  isChecked
+                                    ? "border-[#4F46E5] bg-[#EEF2FF]"
+                                    : "border-[#E5E7EB] hover:border-[#4F46E5]"
+                                }`}
+                              >
+                                <input
+                                  type={isMulti ? "checkbox" : "radio"}
+                                  name={`q-${question.id}`}
+                                  checked={isChecked}
+                                  onChange={(e) =>
+                                    handleOptionsChange(question.id, opt.id, isMulti, e.target.checked)
+                                  }
+                                />
+                                <span className="text-sm text-[#111827] flex-1">{opt.label}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                        {errors[question.id] && (
+                          <div className="mt-2 flex items-center gap-1 text-[#EF4444]">
+                            <AlertCircle className="w-4 h-4" />
+                            <p className="text-sm">{errors[question.id]}</p>
+                          </div>
+                        )}
+                      </div>
                     ) : (
                       <div>
                         <textarea
@@ -367,6 +458,18 @@ export function EmployeeEvaluationForm() {
                     )}
                   </div>
                 ))}
+
+                {previewScore !== null && (
+                  <div className="bg-[#EEF2FF] border border-[#4F46E5]/30 rounded-xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-[#4F46E5] uppercase tracking-wide">Preview score</p>
+                      <p className="text-xs text-[#6B7280]">
+                        Estimated — backend recomputes on submission.
+                      </p>
+                    </div>
+                    <p className="text-2xl text-[#4F46E5]">{previewScore.toFixed(2)}</p>
+                  </div>
+                )}
 
                 {/* Actions */}
                 <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">

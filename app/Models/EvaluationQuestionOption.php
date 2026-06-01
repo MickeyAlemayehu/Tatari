@@ -15,6 +15,10 @@ class EvaluationQuestionOption extends Model
         'sort_order',
     ];
 
+    protected $casts = [
+        'value' => 'decimal:2',
+    ];
+
     public function question()
     {
         return $this->belongsTo(EvaluationQuestion::class, 'question_id');

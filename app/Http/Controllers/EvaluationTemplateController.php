@@ -67,10 +67,10 @@ class EvaluationTemplateController extends Controller
             'questions.*.type'            => ['sometimes', 'string', Rule::in(['rating', 'text', 'textarea', 'multiple_choice', 'checkbox', 'yes_no', 'numeric'])],
             'questions.*.category'        => ['nullable', 'string', 'max:150'],
             'questions.*.required'        => ['sometimes', 'boolean'],
-            'questions.*.weight'          => ['sometimes', 'integer', 'min:0'],
+            'questions.*.weight'          => ['sometimes', 'numeric', 'gt:0'],
             'questions.*.options'         => ['sometimes', 'array'],
             'questions.*.options.*.label' => ['required_with:questions.*.options', 'string'],
-            'questions.*.options.*.value' => ['sometimes', 'integer'],
+            'questions.*.options.*.value' => ['sometimes', 'numeric'],
         ]);
 
         $this->assertWeightsSumTo100($data['weights'] ?? null);
@@ -198,10 +198,10 @@ class EvaluationTemplateController extends Controller
             'category'        => ['nullable', 'string', 'max:150'],
             'required'        => ['sometimes', 'boolean'],
             'sort_order'      => ['sometimes', 'integer', 'min:0'],
-            'weight'          => ['sometimes', 'integer', 'min:0'],
+            'weight'          => ['sometimes', 'numeric', 'gt:0'],
             'options'         => ['sometimes', 'array'],
             'options.*.label' => ['required_with:options', 'string'],
-            'options.*.value' => ['sometimes', 'integer'],
+            'options.*.value' => ['sometimes', 'numeric'],
         ]);
 
         // Default sort_order to end of list
@@ -249,10 +249,10 @@ class EvaluationTemplateController extends Controller
             'category'        => ['nullable', 'string', 'max:150'],
             'required'        => ['sometimes', 'boolean'],
             'sort_order'      => ['sometimes', 'integer', 'min:0'],
-            'weight'          => ['sometimes', 'integer', 'min:0'],
+            'weight'          => ['sometimes', 'numeric', 'gt:0'],
             'options'         => ['sometimes', 'array'],
             'options.*.label' => ['required_with:options', 'string'],
-            'options.*.value' => ['sometimes', 'integer'],
+            'options.*.value' => ['sometimes', 'numeric'],
         ]);
 
         // Pull options out before model update

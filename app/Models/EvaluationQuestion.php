@@ -21,6 +21,7 @@ class EvaluationQuestion extends Model
 
     protected $casts = [
         'required' => 'boolean',
+        'weight' => 'decimal:2',
     ];
 
     public function template()
