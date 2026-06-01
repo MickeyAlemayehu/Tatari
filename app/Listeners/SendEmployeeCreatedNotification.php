@@ -3,8 +3,11 @@
 namespace App\Listeners;
 
 use App\Events\EmployeeCreated;
+use App\Mail\EmployeeWelcome;
 use App\Models\Employee;
 use App\Services\NotificationService;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class SendEmployeeCreatedNotification
 {
@@ -16,6 +19,14 @@ class SendEmployeeCreatedNotification
         $name = trim("{$employee->first_name} {$employee->last_name}");
         $dept = $employee->department?->name;
 
+        // ── Send welcome email with login credentials ──
+        try {
+            Mail::send(new EmployeeWelcome($employee));
+        } catch (\Throwable $e) {
+            Log::warning("Failed to send welcome email to {$employee->email}: {$e->getMessage()}");
+        }
+
+        // ── Notify admins / HR ──
         $recipients = Employee::query()
             ->where('status', 'active')
             ->where('id', '!=', $employee->id)
@@ -31,3 +42,4 @@ class SendEmployeeCreatedNotification
         );
     }
 }
+

@@ -2,15 +2,16 @@ import { useState } from "react";
 import { Lock, Bell, Palette, Globe, Shield, Mail, Save, Volume2 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 import { isSoundEnabled, setSoundEnabled } from "../hooks/sound";
+import { useTheme, type ThemePreference } from "../../contexts/ThemeContext";
 
 export function EmployeeSettings() {
+  const { theme, setTheme } = useTheme();
   const [soundOn, setSoundOn] = useState<boolean>(() => isSoundEnabled());
   const [settings, setSettings] = useState({
     emailNotifications: true,
     leaveApprovalNotifications: true,
     performanceReviewNotifications: true,
     language: "en",
-    theme: "light",
     twoFactorAuth: false,
   });
 
@@ -179,14 +180,17 @@ export function EmployeeSettings() {
                     Theme
                   </label>
                   <select
-                    value={settings.theme}
-                    onChange={(e) => setSettings({ ...settings, theme: e.target.value })}
+                    value={theme}
+                    onChange={(e) => setTheme(e.target.value as ThemePreference)}
                     className="w-full px-4 py-2.5 border border-[#E5E7EB] rounded-lg bg-white focus:ring-2 focus:ring-[#4F46E5] focus:outline-none transition"
                   >
                     <option value="light">Light</option>
                     <option value="dark">Dark</option>
-                    <option value="auto">Auto</option>
+                    <option value="auto">Auto (System)</option>
                   </select>
+                  <p className="text-xs text-[#6B7280] mt-2">
+                    Auto follows your operating system's preference.
+                  </p>
                 </div>
               </div>
             </div>
