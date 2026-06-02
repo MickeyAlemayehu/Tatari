@@ -24,7 +24,7 @@ class RecruitmentSeeder extends Seeder
             [
                 'department' => 'Engineering',
                 'title' => 'Senior Software Engineer',
-                'location' => 'San Francisco, CA',
+                'location' => 'Addis Ababa, Ethiopia',
                 'employment_type' => 'full-time',
                 'number_of_positions' => 2,
                 'salary_min' => 120000,
@@ -52,7 +52,7 @@ class RecruitmentSeeder extends Seeder
             [
                 'department' => 'Marketing',
                 'title' => 'Marketing Manager',
-                'location' => 'New York, NY',
+                'location' => 'Hawassa, Ethiopia',
                 'employment_type' => 'full-time',
                 'number_of_positions' => 1,
                 'salary_min' => 100000,
@@ -101,9 +101,9 @@ class RecruitmentSeeder extends Seeder
     private function seedApplicants(JobVacancy $vacancy): void
     {
         $samples = [
-            ['Alex', 'Martinez', 'alex.martinez@email.com', 'shortlisted', '7 years', 'San Francisco, CA', 4.5],
-            ['Sarah', 'Chen', 'sarah.chen@email.com', 'reviewing', '6 years', 'Remote', 4.0],
-            ['Michael', 'Rodriguez', 'm.rodriguez@email.com', 'new', '8 years', 'New York, NY', null],
+            ['Abebe', 'Kebede', 'abebe.kebede@email.com', 'shortlisted', '7 years', 'Addis Ababa', 4.5],
+            ['Chaltu', 'Tolessa', 'chaltu.tolessa@email.com', 'reviewing', '6 years', 'Remote', 4.0],
+            ['Samuel', 'Assefa', 'samuel.assefa@email.com', 'new', '8 years', 'Hawassa', null],
         ];
 
         foreach ($samples as [$first, $last, $email, $status, $experience, $location, $rating]) {

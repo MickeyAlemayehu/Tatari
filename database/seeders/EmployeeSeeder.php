@@ -50,8 +50,8 @@ class EmployeeSeeder extends Seeder
         Employee::updateOrCreate(
             ['email' => 'manager@tatari.local'],
             [
-                'first_name' => 'Maria',
-                'last_name' => 'Manager',
+                'first_name' => 'Abebech',
+                'last_name' => 'Tadesse',
                 'position' => 'HR Manager',
                 'department_id' => $hrDepartmentId,
                 'password' => $plainPassword,
@@ -66,8 +66,8 @@ class EmployeeSeeder extends Seeder
         Employee::updateOrCreate(
             ['email' => 'staff@tatari.local'],
             [
-                'first_name' => 'Sarah',
-                'last_name' => 'Staff',
+                'first_name' => 'Selamawit',
+                'last_name' => 'Bekele',
                 'position' => 'Staff Member',
                 'department_id' => $hrDepartmentId,
                 'password' => $plainPassword,
@@ -82,8 +82,8 @@ class EmployeeSeeder extends Seeder
         Employee::updateOrCreate(
             ['email' => 'revoked@tatari.local'],
             [
-                'first_name' => 'Ryan',
-                'last_name' => 'Revoked',
+                'first_name' => 'Dawit',
+                'last_name' => 'Getachew',
                 'position' => 'Payroll Officer',
                 'department_id' => Department::where('name', 'Finance')->value('id') ?? $hrDepartmentId,
                 'password' => $plainPassword,
@@ -98,8 +98,8 @@ class EmployeeSeeder extends Seeder
         Employee::updateOrCreate(
             ['email' => 'override@tatari.local'],
             [
-                'first_name' => 'Olivia',
-                'last_name' => 'Override',
+                'first_name' => 'Tigist',
+                'last_name' => 'Haile',
                 'position' => 'HR Intern',
                 'department_id' => $hrDepartmentId,
                 'password' => $plainPassword,

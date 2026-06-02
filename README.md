@@ -11,10 +11,9 @@ A full-featured **Human Resource Management System** built with **Laravel 12** (
 | Backend | Laravel 12 (PHP ^8.2) |
 | Frontend | React 18.3, TypeScript, Vite 8 |
 | Styling | Tailwind CSS, Lucide Icons |
-| Database | SQLite / MySQL |
+| Database |  MySQL |
 | Real-time | Laravel Reverb (WebSockets), Laravel Echo |
 | AI | Google Gemini API (applicant CV analysis) |
-| Queue | Database driver |
 | Notifications | Toast (sonner), In-app, Real-time |
 
 ---

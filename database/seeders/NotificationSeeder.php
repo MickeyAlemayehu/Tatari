@@ -14,7 +14,7 @@ class NotificationSeeder extends Seeder
         $staff = Employee::where('email', 'staff@tatari.local')->first();
 
         if ($manager) {
-            $this->notify($manager, 'New Leave Request', 'Sarah Staff has submitted a leave request for May 15-19.', 'leave');
+            $this->notify($manager, 'New Leave Request', 'Selamawit Bekele has submitted a leave request for May 15-19.', 'leave');
             $this->notify($manager, 'New Job Application', 'A new candidate applied for Senior Software Engineer.', 'recruitment');
             $this->notify($manager, 'Performance Review Due', 'Performance reviews are due this week.', 'performance', true);
         }
