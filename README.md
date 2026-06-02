@@ -1,59 +1,158 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Tatari-HRMS
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A full-featured **Human Resource Management System** built with **Laravel 12** (backend) and **React 18 + TypeScript** (frontend). Supports multi-portal access (Employee, HR, Admin) with role-based permissions, real-time notifications, and AI-powered recruitment features.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Tech Stack
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+| Layer | Technology |
+|-------|-----------|
+| Backend | Laravel 12 (PHP ^8.2) |
+| Frontend | React 18.3, TypeScript, Vite 8 |
+| Styling | Tailwind CSS, Lucide Icons |
+| Database | SQLite / MySQL |
+| Real-time | Laravel Reverb (WebSockets), Laravel Echo |
+| AI | Google Gemini API (applicant CV analysis) |
+| Queue | Database driver |
+| Notifications | Toast (sonner), In-app, Real-time |
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+---
 
-## Learning Laravel
+## Modules & Features
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### Authentication & Access Control
+- Three login portals: Employee, HR, and Admin
+- Token-based API authentication
+- Force password change on first login
+- Session inactivity auto-logout
+- Comprehensive audit logging
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### Employee Management
+- Full employee lifecycle (create, edit, deactivate)
+- Employee profiles with department, position, compensation
+- Bulk CSV import with downloadable template
+- Manager assignment hierarchy
 
-## Laravel Sponsors
+### Department Management
+- Create and manage departments
+- Employee headcount tracking
+- Self-service department view for employees
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### Leave Management
+- Configurable leave types (annual, sick, personal, maternity, etc.)
+- Leave request submission and approval workflow
+- Leave balance tracking with carry-forward rules
+- Half-day support per leave type
+- Real-time notifications on leave status changes
 
-### Premium Partners
+### Performance Evaluation (360°)
+- **Evaluation Templates** — configurable forms with mixed question types (rating, text, multiple choice, yes/no, numeric)
+- **Evaluation Periods** — time-bound cycles with multi-template support
+- **360° Evaluations** — self, peer, and manager evaluations
+- **Auto-assignment** — self-evaluations automatically created when a period activates
+- **Weighted Scoring** — configurable weights per evaluator type (e.g., self: 30%, peer: 30%, manager: 40%)
+- **Performance Summaries** — aggregated scores per employee per period
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+### Performance Reviews
+- Simpler cycle-based reviews (distinct from the 360° evaluations)
+- Status workflow: draft → submitted → in review → completed
+- Rating scale, strengths, areas for improvement, goals
 
-## Contributing
+### Recruitment
+- Job vacancy management with employment types, salary ranges, and locations
+- Public career page with job listings and application forms
+- Applicant tracking with status pipeline (submitted → reviewing → shortlisted → hired/rejected)
+- Interview scheduling
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### AI-Powered Applicant Screening
+- Automated CV analysis via Google Gemini API
+- Scores CV against job requirements (0-100)
+- Generates verdict, strengths, gaps, and summary
+- Configurable scoring threshold for HR notifications
+- Supports PDF and DOCX resume parsing
 
-## Code of Conduct
+### Compensation Management
+- Salary breakdown: basic, housing, transport, other allowances
+- Effective date tracking and status management
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Payroll Management
+- Monthly payroll records with allowances, bonuses, and deductions
+- Unpaid leave calculation and approval workflow
 
-## Security Vulnerabilities
+### Notification System
+- In-app notifications with real-time delivery via WebSockets
+- Unread count badge
+- Notifications for leave requests, evaluations, applicant changes, and more
+- Mark as read / clear all
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### Permissions & Access Control
+- Three permission levels: Employee, HR, Administrator
+- Granular individual permission overrides (grant/revoke)
+- Frontend and backend route protection
+- 15+ distinct permissions
 
-## License
+### Audit Logging
+- Tracks all significant actions with employee, module, action, status
+- Searchable by action, module, user, and date range
+- Modules: Authentication, Employee Management, Permissions, Leave Management, and more
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+### System Settings & Company Management
+- Multi-company support with subscription-like expiration tracking
+- System-wide configuration
+
+### Dashboards
+- Role-specific dashboards with composable widgets
+- Headcount, leave, performance, recruitment, and activity widgets
+- Quick actions and recent activity tracking
+
+---
+
+## Database
+
+43 tables covering employees, departments, leave management, performance evaluations, recruitment, payroll, compensation, notifications, audit logs, and system configuration.
+
+---
+
+## Architecture Highlights
+
+- **Event-driven** — 13+ custom events with listeners for notifications, audit logging, and side effects
+- **Queue jobs** — background processing for CV analysis and email
+- **Real-time** — Laravel Reverb WebSockets for live updates
+- **Multi-tenant ready** — company-scoped data model
+- **Polymorphic notifications** — single table serving all entity types
+- **Dashboard widget system** — composable per-role dashboards
+- **Modular frontend** — domain-separated API service files
+- **Session monitoring** — frontend auto-logout on inactivity
+
+---
+
+## Getting Started
+
+### Prerequisites
+- PHP ^8.2
+- Composer
+- Node.js & npm
+- SQLite or MySQL
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <repo-url>
+cd tatari-hrms
+
+# Backend setup
+cp .env.example .env
+composer install
+php artisan key:generate
+php artisan migrate --seed
+
+# Frontend setup
+cd frontend
+npm install
+npm run dev
+
+# Start the Laravel development server (from root)
+php artisan serve
+```
