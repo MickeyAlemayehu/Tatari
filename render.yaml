@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: tatari-hrms-backend
+    env: docker
+    region: frankfurt
+    plan: free
+    envVars:
+      - key: DB_CONNECTION
+        value: pgsql
+      - key: DB_URL
+        fromDatabase:
+          name: tatari-hrms-db
+          property: connectionString
+      - key: APP_ENV
+        value: production
+      - key: APP_URL
+        value: https://tatari-hrms-backend.onrender.com
+      - key: APP_KEY
+        sync: false
+
+databases:
+  - name: tatari-hrms-db
+    databaseName: tatari
+    user: tatari_user
+    plan: free
+    region: frankfurt
