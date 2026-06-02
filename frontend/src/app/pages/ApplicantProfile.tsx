@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router";
 import {
   applicantsService,
   type ApplicantRecord,
+  type ApplicantRecommendation,
   type ApplicantStatus,
 } from "../../services/applicants.service";
 import { AsyncState } from "../components/AsyncState";
@@ -28,6 +29,10 @@ import {
   Award,
   Loader2,
   Pause,
+  Sparkles,
+  RefreshCw,
+  AlertTriangle,
+  TrendingUp,
 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 
@@ -48,6 +53,7 @@ interface ApplicantView {
   coverLetter: string;
   resumePath: string | null;
   interviewAt: string | null;
+  recommendation: ApplicantRecommendation | null;
 }
 
 const STATUS_STYLES: Record<ApplicantStatus, string> = {
@@ -124,6 +130,7 @@ function mapApplicant(a: ApplicantRecord): ApplicantView {
     coverLetter: a.coverLetter ?? "",
     resumePath: record.resumePath ?? null,
     interviewAt: a.interviewAt ?? null,
+    recommendation: a.recommendation ?? null,
   };
 }
 
@@ -141,6 +148,8 @@ export function ApplicantProfile() {
   const [actionPending, setActionPending] = useState<ApplicantStatus | "schedule" | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [reanalyzing, setReanalyzing] = useState(false);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [interviewDate, setInterviewDate] = useState("");
@@ -170,6 +179,64 @@ export function ApplicantProfile() {
       cancelled = true;
     };
   }, [id]);
+
+  // Poll for recommendation updates while the AI screening is still running.
+  useEffect(() => {
+    if (!id || !applicant) return;
+    const rec = applicant.recommendation;
+    const isInFlight = rec && (rec.status === "pending" || rec.status === "processing");
+    if (!isInFlight) return;
+
+    pollTimer.current = setTimeout(async () => {
+      try {
+        const fresh = await applicantsService.get(Number(id));
+        setApplicant(mapApplicant(fresh));
+      } catch {
+        // Silent — the panel keeps showing the previous state and will retry.
+      }
+    }, 5000);
+
+    return () => {
+      if (pollTimer.current) {
+        clearTimeout(pollTimer.current);
+        pollTimer.current = null;
+      }
+    };
+  }, [id, applicant?.recommendation?.status]);
+
+  const handleReanalyze = async () => {
+    if (!id) return;
+    setReanalyzing(true);
+    setActionError(null);
+    try {
+      await applicantsService.refreshRecommendation(Number(id));
+      // Flip the local state to "processing" immediately so the panel
+      // shows a spinner and the poll loop above takes over.
+      setApplicant((prev) =>
+        prev
+          ? {
+              ...prev,
+              recommendation: {
+                status: "processing",
+                score: prev.recommendation?.score ?? null,
+                verdict: prev.recommendation?.verdict ?? null,
+                processedAt: prev.recommendation?.processedAt ?? null,
+                summary: prev.recommendation?.summary ?? null,
+                strengths: prev.recommendation?.strengths ?? [],
+                gaps: prev.recommendation?.gaps ?? [],
+                modelVersion: prev.recommendation?.modelVersion ?? null,
+                errorMessage: null,
+              },
+            }
+          : prev
+      );
+      flashSuccess("Re-analysis queued.");
+    } catch (err) {
+      setActionError(friendlyError(err, "Could not queue re-analysis."));
+    } finally {
+      setReanalyzing(false);
+    }
+  };
 
   const friendlyError = (err: unknown, fallback: string): string => {
     if (err instanceof ApiError) {
@@ -417,6 +484,16 @@ export function ApplicantProfile() {
               </div>
             </div>
 
+            {/* AI Recommendation */}
+            {applicant.recommendation && (
+              <RecommendationCard
+                recommendation={applicant.recommendation}
+                canManage={canManage}
+                onReanalyze={handleReanalyze}
+                reanalyzing={reanalyzing}
+              />
+            )}
+
             {/* Action Buttons */}
             {canManage && (
               <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
@@ -633,5 +710,206 @@ export function ApplicantProfile() {
         </div>
       )}
     </AppLayout>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// AI Recommendation panel
+// ---------------------------------------------------------------------------
+
+const VERDICT_LABEL: Record<NonNullable<ApplicantRecommendation["verdict"]>, string> = {
+  recommended: "Recommended",
+  consider: "Worth Considering",
+  not_recommended: "Not a strong match",
+};
+
+function scoreTone(score: number | null): {
+  badge: string;
+  text: string;
+  bar: string;
+} {
+  if (score === null) {
+    return {
+      badge: "bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]",
+      text: "text-[#6B7280]",
+      bar: "bg-[#9CA3AF]",
+    };
+  }
+  if (score >= 75) {
+    return {
+      badge: "bg-[#DCFCE7] text-[#15803D] border border-green-200",
+      text: "text-[#15803D]",
+      bar: "bg-[#22C55E]",
+    };
+  }
+  if (score >= 60) {
+    return {
+      badge: "bg-amber-50 text-amber-700 border border-amber-200",
+      text: "text-amber-700",
+      bar: "bg-amber-500",
+    };
+  }
+  return {
+    badge: "bg-[#FEF2F2] text-red-700 border border-[#EF4444]/20",
+    text: "text-red-700",
+    bar: "bg-[#EF4444]",
+  };
+}
+
+interface RecommendationCardProps {
+  recommendation: ApplicantRecommendation;
+  canManage: boolean;
+  onReanalyze: () => void;
+  reanalyzing: boolean;
+}
+
+function RecommendationCard({
+  recommendation,
+  canManage,
+  onReanalyze,
+  reanalyzing,
+}: RecommendationCardProps) {
+  const { status, score, verdict, summary, strengths, gaps, errorMessage, processedAt } =
+    recommendation;
+  const inFlight = status === "pending" || status === "processing";
+  const tone = scoreTone(score);
+  const scoreLabel = score === null ? "—" : `${Math.round(score)}`;
+
+  return (
+    <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+      <div className="flex items-start justify-between gap-3 mb-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="w-5 h-5 text-[#4F46E5]" />
+          <div>
+            <h2 className="text-sm text-[#111827]">AI Recommendation</h2>
+            <p className="text-xs text-[#6B7280]">
+              Gemini-scored match against this job's requirements
+              {processedAt && status === "completed" ? ` · updated ${formatDateTime(processedAt)}` : ""}
+            </p>
+          </div>
+        </div>
+
+        {canManage && (
+          <button
+            onClick={onReanalyze}
+            disabled={reanalyzing || inFlight}
+            className="flex items-center gap-2 text-xs text-[#4F46E5] hover:text-indigo-700 disabled:opacity-50"
+            title="Run a fresh AI evaluation"
+          >
+            {reanalyzing || inFlight ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="w-3.5 h-3.5" />
+            )}
+            Re-analyze
+          </button>
+        )}
+      </div>
+
+      {status === "manual_review" && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm text-amber-800">Manual review required</p>
+            <p className="text-xs text-amber-700 mt-1">
+              {summary ||
+                "This CV format couldn't be parsed automatically. Please review the resume manually."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {status === "failed" && (
+        <div className="p-4 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-[#EF4444] mt-0.5 flex-shrink-0" />
+          <div>
+            <p className="text-sm text-red-700">AI screening failed</p>
+            <p className="text-xs text-red-600 mt-1">
+              {errorMessage || "Something went wrong. You can try re-running the analysis."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {inFlight && (
+        <div className="p-4 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg flex items-center gap-3">
+          <Loader2 className="w-5 h-5 text-[#4F46E5] animate-spin" />
+          <div>
+            <p className="text-sm text-[#111827]">Evaluating CV against this role…</p>
+            <p className="text-xs text-[#6B7280]">
+              This usually takes a few seconds. The score will appear here automatically.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {status === "completed" && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-4">
+            <div
+              className={`flex items-center justify-center w-20 h-20 rounded-2xl text-2xl font-semibold ${tone.badge}`}
+            >
+              {scoreLabel}
+              <span className="text-sm ml-0.5">%</span>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <TrendingUp className={`w-4 h-4 ${tone.text}`} />
+                <span className={`text-sm font-medium ${tone.text}`}>
+                  {verdict ? VERDICT_LABEL[verdict] : "Scored"}
+                </span>
+              </div>
+              <div className="w-full h-2 bg-[#F3F4F6] rounded-full overflow-hidden">
+                <div
+                  className={`h-full ${tone.bar} transition-all`}
+                  style={{ width: `${Math.max(0, Math.min(100, score ?? 0))}%` }}
+                />
+              </div>
+              {summary && (
+                <p className="text-sm text-[#111827] mt-3 leading-relaxed">{summary}</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 bg-[#F9FAFB] rounded-lg">
+              <p className="text-xs text-[#6B7280] mb-2 uppercase tracking-wide">Strengths</p>
+              {strengths && strengths.length > 0 ? (
+                <ul className="space-y-2">
+                  {strengths.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm text-[#111827]">
+                      <CheckCircle className="w-4 h-4 text-[#22C55E] mt-0.5 flex-shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-[#6B7280]">None highlighted.</p>
+              )}
+            </div>
+
+            <div className="p-4 bg-[#F9FAFB] rounded-lg">
+              <p className="text-xs text-[#6B7280] mb-2 uppercase tracking-wide">Potential Gaps</p>
+              {gaps && gaps.length > 0 ? (
+                <ul className="space-y-2">
+                  {gaps.map((item, idx) => (
+                    <li key={idx} className="flex items-start gap-2 text-sm text-[#111827]">
+                      <AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-[#6B7280]">None highlighted.</p>
+              )}
+            </div>
+          </div>
+
+          <p className="text-xs text-[#6B7280] italic">
+            AI suggestions are advisory. Always make hiring decisions based on your own review.
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

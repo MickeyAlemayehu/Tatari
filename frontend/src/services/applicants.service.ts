@@ -9,6 +9,31 @@ export type ApplicantStatus =
   | "hired"
   | "interview_scheduled";
 
+export type RecommendationStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "manual_review";
+
+export type RecommendationVerdict =
+  | "recommended"
+  | "consider"
+  | "not_recommended";
+
+export interface ApplicantRecommendation {
+  status: RecommendationStatus;
+  score: number | null;
+  verdict: RecommendationVerdict | null;
+  processedAt: string | null;
+  // Only present when the API returns the detailed payload (single applicant).
+  summary?: string | null;
+  strengths?: string[];
+  gaps?: string[];
+  modelVersion?: string | null;
+  errorMessage?: string | null;
+}
+
 export interface ApplicantRecord {
   id: number;
   name: string;
@@ -26,6 +51,7 @@ export interface ApplicantRecord {
   experience?: string;
   coverLetter?: string;
   interviewAt?: string | null;
+  recommendation?: ApplicantRecommendation | null;
 }
 
 export const applicantsService = {
@@ -58,4 +84,10 @@ export const applicantsService = {
       body,
       auth: false,
     }),
+
+  refreshRecommendation: (id: number) =>
+    api.post<{ message: string; applicantId: number }>(
+      `/applicants/${id}/recommendation/refresh`,
+      {}
+    ),
 };

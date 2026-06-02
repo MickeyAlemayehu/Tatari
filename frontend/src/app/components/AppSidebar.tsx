@@ -263,7 +263,7 @@ export function AppSidebar() {
         <p className="text-xs text-[#6B7280] mt-1 capitalize">{portalLabel} Portal</p>
       </div>
 
-      <nav className="flex-1 px-4 py-6 overflow-y-auto">
+      <nav className="flex-1 px-4 py-6 overflow-y-auto hide-scrollbar">
         <div className="space-y-1">
           {permittedNavigation.map((item) => renderNavItem(item))}
         </div>

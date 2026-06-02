@@ -118,6 +118,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/applicants/{applicant}', [ApplicantController::class, 'show']);
         Route::get('/applicants/{applicant}/resume/download', [ApplicantController::class, 'downloadResume']);
         Route::patch('/applicants/{applicant}', [ApplicantController::class, 'update']);
+        Route::post('/applicants/{applicant}/recommendation/refresh', [ApplicantController::class, 'refreshRecommendation']);
     });
 
     Route::middleware('employee.permission:performance_create')->group(function () {

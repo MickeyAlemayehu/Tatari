@@ -211,3 +211,13 @@ html.dark input::placeholder,
 html.dark textarea::placeholder {
   color: #64748b;
 }
+
+/* Hide scrollbar but keep scroll functionality */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

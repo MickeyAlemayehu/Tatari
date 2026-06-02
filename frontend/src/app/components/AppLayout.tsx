@@ -44,7 +44,7 @@ export function AppLayout({
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="h-[calc(100%-73px)] overflow-y-auto">
+            <div className="h-[calc(100%-73px)] overflow-y-auto hide-scrollbar">
               <AppSidebar />
             </div>
           </div>

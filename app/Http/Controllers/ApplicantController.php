@@ -7,6 +7,7 @@ use App\Models\Applicant;
 use App\Models\JobVacancy;
 use App\Events\ApplicantStatusChanged;
 use App\Events\InterviewScheduled;
+use App\Jobs\ProcessApplicantRecommendation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -20,7 +21,7 @@ class ApplicantController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Applicant::query()
-            ->with(['vacancy.department'])
+            ->with(['vacancy.department', 'recommendation'])
             ->latest('applied_at');
 
         if ($request->filled('status')) {
@@ -37,7 +38,7 @@ class ApplicantController extends Controller
 
     public function show(Applicant $applicant): JsonResponse
     {
-        return response()->json($this->payload($applicant->load(['vacancy.department', 'reviewer']), true));
+        return response()->json($this->payload($applicant->load(['vacancy.department', 'reviewer', 'recommendation']), true));
     }
 
     public function apply(Request $request, JobVacancy $jobVacancy): JsonResponse
@@ -79,6 +80,10 @@ class ApplicantController extends Controller
             'status' => 'new',
             'applied_at' => now(),
         ]);
+
+        // Kick off AI screening in the background. Failures never block the
+        // applicant's submission — the queue worker retries on its own.
+        ProcessApplicantRecommendation::dispatch($applicant->id);
 
         return response()->json($this->payload($applicant->load('vacancy.department')), Response::HTTP_CREATED);
     }
@@ -128,7 +133,7 @@ class ApplicantController extends Controller
             }
         }
 
-        return response()->json($this->payload($applicant->fresh()->load(['vacancy.department', 'reviewer']), true));
+        return response()->json($this->payload($applicant->fresh()->load(['vacancy.department', 'reviewer', 'recommendation']), true));
     }
 
     public function downloadResume(Applicant $applicant)
@@ -148,6 +153,16 @@ class ApplicantController extends Controller
         $downloadName = str_replace(' ', '_', $friendlyName) . '-Resume.' . $extension;
 
         return Storage::disk('public')->download($applicant->resume_path, $downloadName);
+    }
+
+    public function refreshRecommendation(Applicant $applicant): JsonResponse
+    {
+        ProcessApplicantRecommendation::dispatch($applicant->id, true);
+
+        return response()->json([
+            'message' => 'Recommendation re-analysis queued.',
+            'applicantId' => $applicant->id,
+        ], Response::HTTP_ACCEPTED);
     }
 
     private function sendStatusNotification(Applicant $applicant, string $status): void
@@ -189,6 +204,7 @@ class ApplicantController extends Controller
             'avatar' => strtoupper(substr($applicant->first_name, 0, 1).substr($applicant->last_name, 0, 1)),
             'rating' => $applicant->rating === null ? null : (float) $applicant->rating,
             'interviewAt' => $applicant->interview_at?->toIso8601String(),
+            'recommendation' => $this->recommendationPayload($applicant, $includeDetails),
         ];
 
         if ($includeDetails) {
@@ -201,5 +217,30 @@ class ApplicantController extends Controller
         }
 
         return $payload;
+    }
+
+    private function recommendationPayload(Applicant $applicant, bool $includeDetails): ?array
+    {
+        $rec = $applicant->relationLoaded('recommendation') ? $applicant->recommendation : null;
+        if (! $rec) {
+            return null;
+        }
+
+        $base = [
+            'status' => $rec->status,
+            'score' => $rec->score === null ? null : (float) $rec->score,
+            'verdict' => $rec->verdict,
+            'processedAt' => $rec->processed_at?->toIso8601String(),
+        ];
+
+        if ($includeDetails) {
+            $base['summary'] = $rec->summary;
+            $base['strengths'] = $rec->strengths ?? [];
+            $base['gaps'] = $rec->gaps ?? [];
+            $base['modelVersion'] = $rec->model_version;
+            $base['errorMessage'] = $rec->error_message;
+        }
+
+        return $base;
     }
 }

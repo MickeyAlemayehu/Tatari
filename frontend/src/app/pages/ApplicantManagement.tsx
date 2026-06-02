@@ -13,12 +13,15 @@ import {
   Calendar,
   Pause,
   Loader2,
+  Sparkles,
+  ArrowDownUp,
 } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 import { AsyncState } from "../components/AsyncState";
 import {
   applicantsService,
   type ApplicantRecord,
+  type ApplicantRecommendation,
   type ApplicantStatus,
 } from "../../services/applicants.service";
 import { ApiError } from "../../lib/api";
@@ -39,6 +42,7 @@ interface ApplicantRow {
   location: string;
   avatar: string;
   interviewAt: string | null;
+  recommendation: ApplicantRecommendation | null;
 }
 
 const STATUS_STYLES: Record<ApplicantStatus, string> = {
@@ -90,6 +94,7 @@ function mapRow(a: ApplicantRecord): ApplicantRow {
       (a.lastName ?? a.name.split(" ").slice(1).join(" ")) || "?"
     ),
     interviewAt: a.interviewAt ?? null,
+    recommendation: a.recommendation ?? null,
   };
 }
 
@@ -111,6 +116,7 @@ export function ApplicantManagement() {
   const [filterDepartment, setFilterDepartment] = useState<string>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [selectedApplicants, setSelectedApplicants] = useState<number[]>([]);
+  const [sortByScore, setSortByScore] = useState(false);
 
   const [applicants, setApplicants] = useState<ApplicantRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,7 +152,7 @@ export function ApplicantManagement() {
   );
 
   const filteredApplicants = useMemo(() => {
-    return applicants.filter((applicant) => {
+    const filtered = applicants.filter((applicant) => {
       const matchesSearch =
         applicant.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         applicant.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -156,7 +162,17 @@ export function ApplicantManagement() {
       const matchesDepartment = filterDepartment === "all" || applicant.department === filterDepartment;
       return matchesSearch && matchesStatus && matchesJob && matchesDepartment;
     });
-  }, [applicants, searchQuery, filterStatus, filterJob, filterDepartment]);
+
+    if (sortByScore) {
+      filtered.sort((a, b) => {
+        const sa = a.recommendation?.score ?? -1;
+        const sb = b.recommendation?.score ?? -1;
+        return sb - sa;
+      });
+    }
+
+    return filtered;
+  }, [applicants, searchQuery, filterStatus, filterJob, filterDepartment, sortByScore]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<"all" | ApplicantStatus, number> = {
@@ -465,6 +481,20 @@ export function ApplicantManagement() {
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Job Position</th>
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Department</th>
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Experience</th>
+                        <th className="text-left py-3 px-4 text-sm text-[#6B7280]">
+                          <button
+                            type="button"
+                            onClick={() => setSortByScore((v) => !v)}
+                            className={`inline-flex items-center gap-1 hover:text-[#111827] transition ${
+                              sortByScore ? "text-[#4F46E5]" : ""
+                            }`}
+                            title="Sort by AI match score (highest first)"
+                          >
+                            <Sparkles className="w-3.5 h-3.5" />
+                            Match
+                            <ArrowDownUp className="w-3 h-3" />
+                          </button>
+                        </th>
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Applied Date</th>
                         <th className="text-left py-3 px-4 text-sm text-[#6B7280]">Status</th>
                         <th className="text-right py-3 px-4 text-sm text-[#6B7280]">Actions</th>
@@ -513,6 +543,10 @@ export function ApplicantManagement() {
                           </td>
 
                           <td className="py-4 px-4">
+                            <MatchBadge recommendation={applicant.recommendation} />
+                          </td>
+
+                          <td className="py-4 px-4">
                             <div className="flex items-center gap-1.5 text-sm text-[#111827]">
                               <Calendar className="w-4 h-4 text-[#6B7280]" />
                               {formatDate(applicant.appliedDate)}
@@ -552,5 +586,65 @@ export function ApplicantManagement() {
         </main>
       </div>
     </AppLayout>
+  );
+}
+
+function MatchBadge({ recommendation }: { recommendation: ApplicantRecommendation | null }) {
+  if (!recommendation) {
+    return <span className="text-sm text-[#9CA3AF]">—</span>;
+  }
+
+  const { status, score } = recommendation;
+
+  if (status === "pending" || status === "processing") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-[#6B7280]">
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+        Scoring…
+      </span>
+    );
+  }
+
+  if (status === "manual_review") {
+    return (
+      <span
+        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-amber-50 text-amber-700 border border-amber-200"
+        title="CV could not be parsed automatically"
+      >
+        Manual
+      </span>
+    );
+  }
+
+  if (status === "failed") {
+    return (
+      <span
+        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-[#FEF2F2] text-red-700 border border-[#EF4444]/20"
+        title={recommendation.errorMessage ?? "AI screening failed"}
+      >
+        Failed
+      </span>
+    );
+  }
+
+  if (score === null) {
+    return <span className="text-sm text-[#9CA3AF]">—</span>;
+  }
+
+  const rounded = Math.round(score);
+  const tone =
+    score >= 75
+      ? "bg-[#DCFCE7] text-[#15803D] border border-green-200"
+      : score >= 60
+        ? "bg-amber-50 text-amber-700 border border-amber-200"
+        : "bg-[#F3F4F6] text-[#6B7280] border border-[#E5E7EB]";
+
+  return (
+    <span
+      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${tone}`}
+      title="AI-evaluated match against this job's requirements"
+    >
+      {rounded}%
+    </span>
   );
 }

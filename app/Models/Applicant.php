@@ -33,4 +33,8 @@ class Applicant extends Model
     public function reviewer() {
         return $this->belongsTo(Employee::class, 'reviewed_by');
     }
+
+    public function recommendation() {
+        return $this->hasOne(ApplicantRecommendation::class);
+    }
 }

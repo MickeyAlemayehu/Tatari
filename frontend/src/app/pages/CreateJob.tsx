@@ -82,10 +82,35 @@ export function CreateJob() {
 
     if (!formData.deadline) {
       newErrors.deadline = "Application deadline is required";
+    } else {
+      const selectedDate = new Date(formData.deadline);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (selectedDate < today) {
+        newErrors.deadline = "Deadline cannot be a past date";
+      }
     }
 
     if (!formData.description.trim()) {
       newErrors.description = "Job description is required";
+    }
+
+    if (formData.salaryMin) {
+      const min = Number(formData.salaryMin);
+      if (isNaN(min)) newErrors.salaryMin = "Must be a number";
+      else if (min < 0) newErrors.salaryMin = "Cannot be negative";
+    }
+
+    if (formData.salaryMax) {
+      const max = Number(formData.salaryMax);
+      if (isNaN(max)) newErrors.salaryMax = "Must be a number";
+      else if (max < 0) newErrors.salaryMax = "Cannot be negative";
+    }
+
+    if (formData.salaryMin && formData.salaryMax && !newErrors.salaryMin && !newErrors.salaryMax) {
+      if (Number(formData.salaryMin) > Number(formData.salaryMax)) {
+        newErrors.salaryMax = "Max salary must be greater than or equal to min salary";
+      }
     }
 
     setErrors(newErrors);
@@ -338,6 +363,7 @@ export function CreateJob() {
                           type="date"
                           id="deadline"
                           name="deadline"
+                          min={new Date().toISOString().split("T")[0]}
                           value={formData.deadline}
                           onChange={handleChange}
                           className={`w-full pl-10 pr-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition ${
@@ -370,8 +396,17 @@ export function CreateJob() {
                           value={formData.salaryMin}
                           onChange={handleChange}
                           placeholder="Min (e.g., 80000)"
-                          className="w-full pl-10 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
+                          className={`w-full pl-10 pr-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition ${
+                            errors.salaryMin
+                              ? "border-[#EF4444]/30 focus:ring-[#EF4444]"
+                              : "border-[#E5E7EB] focus:ring-[#4F46E5]"
+                          }`}
                         />
+                        {errors.salaryMin && (
+                          <p className="mt-1.5 text-xs text-[#EF4444] absolute -bottom-5">
+                            {errors.salaryMin}
+                          </p>
+                        )}
                       </div>
                       <div className="relative">
                         <Plus className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-[#6B7280]" />
@@ -381,8 +416,17 @@ export function CreateJob() {
                           value={formData.salaryMax}
                           onChange={handleChange}
                           placeholder="Max (e.g., 120000)"
-                          className="w-full pl-10 pr-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] transition"
+                          className={`w-full pl-10 pr-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition ${
+                            errors.salaryMax
+                              ? "border-[#EF4444]/30 focus:ring-[#EF4444]"
+                              : "border-[#E5E7EB] focus:ring-[#4F46E5]"
+                          }`}
                         />
+                        {errors.salaryMax && (
+                          <p className="mt-1.5 text-xs text-[#EF4444] absolute -bottom-5">
+                            {errors.salaryMax}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </div>
