@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ApiAuthController;
 use App\Http\Controllers\ApplicantController;
+use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\CompanyController;
 use App\Http\Controllers\CompensationController;
 use App\Http\Controllers\DepartmentController;
@@ -9,9 +10,10 @@ use App\Http\Controllers\EmployeeController;
 use App\Http\Controllers\JobVacancyController;
 use App\Http\Controllers\LeaveManagementController;
 use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\PayrollController;
 use App\Http\Controllers\PerformanceEvaluationWorkflowController;
 use App\Http\Controllers\PerformanceReviewController;
+use App\Http\Controllers\EvaluationTemplateController;
+use App\Http\Controllers\PermissionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/ping', function () {
@@ -27,6 +29,8 @@ Route::post('/public/jobs/{jobVacancy}/apply', [ApplicantController::class, 'app
 Route::middleware('auth:api')->group(function () {
     Route::post('/logout', [ApiAuthController::class, 'logout']);
     Route::get('/me', [ApiAuthController::class, 'me']);
+    Route::post('/me/password', [ApiAuthController::class, 'changePassword']);
+    Route::get('/me/department', [DepartmentController::class, 'mine']);
 
     Route::middleware('employee.permission:access_employee_portal')->group(function () {
         Route::get('/leave-types', [LeaveManagementController::class, 'types']);
@@ -46,19 +50,20 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/evaluation-assignments/my', [PerformanceEvaluationWorkflowController::class, 'myAssignments']);
         Route::get('/performance-results/my', [PerformanceEvaluationWorkflowController::class, 'myResults']);
 
-        Route::get('/payroll/my-payslips', [PayrollController::class, 'myPayslips']);
-        Route::get('/payroll/payslips/{payroll}', [PayrollController::class, 'payslip']);
+        // Employee-facing: fetch questions for an assignment's template
+        Route::get('/evaluation-questions/for-assignment/{assignment}', [PerformanceEvaluationWorkflowController::class, 'questionsForAssignment']);
+
     });
 
     Route::middleware('employee.permission:access_admin_portal')->group(function () {
         Route::get('/companies', [CompanyController::class, 'index']);
         Route::get('/companies/{company}', [CompanyController::class, 'show']);
         Route::patch('/companies/{company}', [CompanyController::class, 'update']);
+        
+        Route::get('/audit-logs', [AuditLogController::class, 'index']);
+        Route::get('/audit-logs/modules', [AuditLogController::class, 'modules']);
     });
 
-    Route::get('/admin/payroll', function () {
-        return response()->json(['message' => 'Payroll management API access granted']);
-    })->middleware('employee.permission:manage_payroll');
 
     Route::middleware('employee.permission:access_employee_portal')->group(function () {
         Route::get('/performance-reviews', [PerformanceReviewController::class, 'index']);
@@ -79,6 +84,8 @@ Route::middleware('auth:api')->group(function () {
     Route::middleware('employee.permission:manage_employees')->group(function () {
         Route::get('/employees', [EmployeeController::class, 'index']);
         Route::post('/employees', [EmployeeController::class, 'store']);
+        Route::get('/employees/import/template', [EmployeeController::class, 'importTemplate']);
+        Route::post('/employees/import', [EmployeeController::class, 'import']);
         Route::get('/employees/{employee}', [EmployeeController::class, 'show']);
         Route::patch('/employees/{employee}', [EmployeeController::class, 'update']);
         Route::post('/employees/{employee}/deactivate', [EmployeeController::class, 'deactivate']);
@@ -87,6 +94,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/departments', [DepartmentController::class, 'index']);
         Route::post('/departments', [DepartmentController::class, 'store']);
         Route::get('/departments/{department}', [DepartmentController::class, 'show']);
+        Route::get('/departments/{department}/employees', [DepartmentController::class, 'employees']);
         Route::patch('/departments/{department}', [DepartmentController::class, 'update']);
         Route::delete('/departments/{department}', [DepartmentController::class, 'destroy']);
     });
@@ -108,30 +116,57 @@ Route::middleware('auth:api')->group(function () {
 
         Route::get('/applicants', [ApplicantController::class, 'index']);
         Route::get('/applicants/{applicant}', [ApplicantController::class, 'show']);
+        Route::get('/applicants/{applicant}/resume/download', [ApplicantController::class, 'downloadResume']);
         Route::patch('/applicants/{applicant}', [ApplicantController::class, 'update']);
+        Route::post('/applicants/{applicant}/recommendation/refresh', [ApplicantController::class, 'refreshRecommendation']);
     });
 
     Route::middleware('employee.permission:performance_create')->group(function () {
         Route::get('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'periods']);
         Route::post('/evaluation-periods', [PerformanceEvaluationWorkflowController::class, 'storePeriod']);
+        Route::get('/evaluation-periods/{period}', [PerformanceEvaluationWorkflowController::class, 'getPeriod']);
+        Route::put('/evaluation-periods/{period}', [PerformanceEvaluationWorkflowController::class, 'updatePeriod']);
+        Route::post('/evaluation-periods/{period}/activate', [PerformanceEvaluationWorkflowController::class, 'activatePeriod']);
         Route::get('/evaluation-assignments', [PerformanceEvaluationWorkflowController::class, 'assignments']);
-        Route::post('/evaluation-assignments/assign-peers', [PerformanceEvaluationWorkflowController::class, 'assignPeers']);
+        Route::get('/evaluation-assignments/for-employee', [PerformanceEvaluationWorkflowController::class, 'assignmentsForEmployeeInPeriod']);
+        Route::post('/evaluation-assignments/upsert-for-employee', [PerformanceEvaluationWorkflowController::class, 'upsertEvaluatorsForEmployee']);
+        // Legacy alias — keeps old callers working
+        Route::post('/evaluation-assignments/assign-peers', [PerformanceEvaluationWorkflowController::class, 'upsertEvaluatorsForEmployee']);
         Route::get('/performance-results', [PerformanceEvaluationWorkflowController::class, 'results']);
+
+        // Evaluation template CRUD
+        Route::get('/evaluation-templates', [EvaluationTemplateController::class, 'index']);
+        Route::post('/evaluation-templates', [EvaluationTemplateController::class, 'store']);
+        Route::get('/evaluation-templates/{template}', [EvaluationTemplateController::class, 'show']);
+        Route::patch('/evaluation-templates/{template}', [EvaluationTemplateController::class, 'update']);
+        Route::delete('/evaluation-templates/{template}', [EvaluationTemplateController::class, 'destroy']);
+        Route::post('/evaluation-templates/{template}/activate', [EvaluationTemplateController::class, 'activate']);
+        Route::post('/evaluation-templates/{template}/deactivate', [EvaluationTemplateController::class, 'deactivate']);
+
+        // Evaluation question CRUD
+        Route::get('/evaluation-questions', [EvaluationTemplateController::class, 'questions']);
+        Route::post('/evaluation-questions', [EvaluationTemplateController::class, 'storeQuestion']);
+        Route::get('/evaluation-questions/{question}', [EvaluationTemplateController::class, 'showQuestion']);
+        Route::patch('/evaluation-questions/{question}', [EvaluationTemplateController::class, 'updateQuestion']);
+        Route::delete('/evaluation-questions/{question}', [EvaluationTemplateController::class, 'destroyQuestion']);
+        Route::post('/evaluation-questions/reorder', [EvaluationTemplateController::class, 'reorderQuestions']);
     });
 
-    Route::middleware('employee.permission:manage_payroll')->group(function () {
+    Route::middleware('employee.permission:manage_employees')->group(function () {
         Route::get('/compensations', [CompensationController::class, 'index']);
         Route::post('/compensations', [CompensationController::class, 'store']);
         Route::get('/compensations/{compensation}', [CompensationController::class, 'show']);
         Route::patch('/compensations/{compensation}', [CompensationController::class, 'update']);
         Route::delete('/compensations/{compensation}', [CompensationController::class, 'destroy']);
+    });
 
-        Route::get('/payroll', [PayrollController::class, 'index']);
-        Route::get('/payroll/summary', [PayrollController::class, 'summary']);
-        Route::get('/payroll/period', [PayrollController::class, 'period']);
-        Route::post('/payroll/generate', [PayrollController::class, 'generate']);
-        Route::get('/payroll/{payroll}', [PayrollController::class, 'show']);
-        Route::post('/payroll/{payroll}/approve', [PayrollController::class, 'approve']);
-        Route::post('/payroll/{payroll}/reject', [PayrollController::class, 'reject']);
+    // Permission management (admin only)
+    Route::middleware('employee.permission:access_admin_portal')->group(function () {
+        Route::get('/permissions/available', [PermissionController::class, 'getAvailablePermissions']);
+        Route::patch('/employees/{employee}/permission-level', [PermissionController::class, 'updatePermissionLevel']);
+        Route::post('/employees/{employee}/permissions/grant', [PermissionController::class, 'grantPermission']);
+        Route::post('/employees/{employee}/permissions/revoke', [PermissionController::class, 'revokePermission']);
+        Route::delete('/employees/{employee}/permissions/granted/{permission}', [PermissionController::class, 'removeGrantedPermission']);
+        Route::delete('/employees/{employee}/permissions/revoked/{permission}', [PermissionController::class, 'removeRevokedPermission']);
     });
 });

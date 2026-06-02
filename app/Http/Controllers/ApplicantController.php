@@ -2,10 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ApplicantStatusUpdated;
 use App\Models\Applicant;
 use App\Models\JobVacancy;
+use App\Events\ApplicantStatusChanged;
+use App\Events\InterviewScheduled;
+use App\Jobs\ProcessApplicantRecommendation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -14,7 +21,7 @@ class ApplicantController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = Applicant::query()
-            ->with(['vacancy.department'])
+            ->with(['vacancy.department', 'recommendation'])
             ->latest('applied_at');
 
         if ($request->filled('status')) {
@@ -31,7 +38,7 @@ class ApplicantController extends Controller
 
     public function show(Applicant $applicant): JsonResponse
     {
-        return response()->json($this->payload($applicant->load(['vacancy.department', 'reviewer']), true));
+        return response()->json($this->payload($applicant->load(['vacancy.department', 'reviewer', 'recommendation']), true));
     }
 
     public function apply(Request $request, JobVacancy $jobVacancy): JsonResponse
@@ -74,6 +81,10 @@ class ApplicantController extends Controller
             'applied_at' => now(),
         ]);
 
+        // Kick off AI screening in the background. Failures never block the
+        // applicant's submission — the queue worker retries on its own.
+        ProcessApplicantRecommendation::dispatch($applicant->id);
+
         return response()->json($this->payload($applicant->load('vacancy.department')), Response::HTTP_CREATED);
     }
 
@@ -82,7 +93,7 @@ class ApplicantController extends Controller
         $reviewer = $request->user('api') ?? $request->user();
 
         $data = $request->validate([
-            'status' => ['sometimes', 'string', Rule::in(['new', 'reviewing', 'shortlisted', 'rejected', 'hired'])],
+            'status' => ['sometimes', 'string', Rule::in(['new', 'reviewing', 'shortlisted', 'rejected', 'hired', 'interview_scheduled'])],
             'rating' => ['nullable', 'numeric', 'between:0,5'],
             'rejection_reason' => ['nullable', 'string', 'max:2000'],
             'location' => ['nullable', 'string', 'max:255'],
@@ -90,6 +101,7 @@ class ApplicantController extends Controller
             'current_company' => ['nullable', 'string', 'max:255'],
             'education' => ['nullable', 'string', 'max:255'],
             'notice_period' => ['nullable', 'string', 'max:100'],
+            'interview_at' => ['nullable', 'date'],
         ]);
 
         if (array_key_exists('status', $data)) {
@@ -97,9 +109,78 @@ class ApplicantController extends Controller
             $data['reviewed_at'] = now();
         }
 
+        $previousStatus = $applicant->status;
         $applicant->update($data);
 
-        return response()->json($this->payload($applicant->fresh()->load(['vacancy.department', 'reviewer']), true));
+        if (
+            array_key_exists('status', $data)
+            && $data['status'] !== $previousStatus
+            && in_array($data['status'], ['hired', 'rejected', 'shortlisted', 'interview_scheduled'], true)
+        ) {
+            $this->sendStatusNotification($applicant->fresh()->load('vacancy'), $data['status']);
+        }
+
+        if (array_key_exists('status', $data) && $data['status'] !== $previousStatus) {
+            event(new ApplicantStatusChanged(
+                $applicant->fresh(),
+                $previousStatus,
+                $data['status'],
+                $reviewer?->id
+            ));
+
+            if ($data['status'] === 'interview_scheduled') {
+                event(new InterviewScheduled($applicant->fresh()));
+            }
+        }
+
+        return response()->json($this->payload($applicant->fresh()->load(['vacancy.department', 'reviewer', 'recommendation']), true));
+    }
+
+    public function downloadResume(Applicant $applicant)
+    {
+        if (! $applicant->resume_path) {
+            return response()->json(['message' => 'This applicant has no resume on file.'], Response::HTTP_NOT_FOUND);
+        }
+
+        if (! Storage::disk('public')->exists($applicant->resume_path)) {
+            return response()->json(['message' => 'Resume file is missing on the server.'], Response::HTTP_NOT_FOUND);
+        }
+
+        $extension    = strtolower(pathinfo($applicant->resume_path, PATHINFO_EXTENSION));
+        $friendlyName = trim("{$applicant->first_name} {$applicant->last_name}");
+        $friendlyName = preg_replace('/[^A-Za-z0-9\- ]/', '', $friendlyName);
+        $friendlyName = trim($friendlyName) ?: "applicant-{$applicant->id}";
+        $downloadName = str_replace(' ', '_', $friendlyName) . '-Resume.' . $extension;
+
+        return Storage::disk('public')->download($applicant->resume_path, $downloadName);
+    }
+
+    public function refreshRecommendation(Applicant $applicant): JsonResponse
+    {
+        ProcessApplicantRecommendation::dispatch($applicant->id, true);
+
+        return response()->json([
+            'message' => 'Recommendation re-analysis queued.',
+            'applicantId' => $applicant->id,
+        ], Response::HTTP_ACCEPTED);
+    }
+
+    private function sendStatusNotification(Applicant $applicant, string $status): void
+    {
+        if (! $applicant->email) {
+            return;
+        }
+
+        try {
+            Mail::to($applicant->email)->send(new ApplicantStatusUpdated($applicant, $status));
+        } catch (\Throwable $e) {
+            // Mailer failures must never block a successful status update. Log and move on.
+            Log::error('Failed to send applicant status email', [
+                'applicant_id' => $applicant->id,
+                'status'       => $status,
+                'error'        => $e->getMessage(),
+            ]);
+        }
     }
 
     public function payload(Applicant $applicant, bool $includeDetails = false): array
@@ -122,6 +203,8 @@ class ApplicantController extends Controller
             'location' => $applicant->location,
             'avatar' => strtoupper(substr($applicant->first_name, 0, 1).substr($applicant->last_name, 0, 1)),
             'rating' => $applicant->rating === null ? null : (float) $applicant->rating,
+            'interviewAt' => $applicant->interview_at?->toIso8601String(),
+            'recommendation' => $this->recommendationPayload($applicant, $includeDetails),
         ];
 
         if ($includeDetails) {
@@ -134,5 +217,30 @@ class ApplicantController extends Controller
         }
 
         return $payload;
+    }
+
+    private function recommendationPayload(Applicant $applicant, bool $includeDetails): ?array
+    {
+        $rec = $applicant->relationLoaded('recommendation') ? $applicant->recommendation : null;
+        if (! $rec) {
+            return null;
+        }
+
+        $base = [
+            'status' => $rec->status,
+            'score' => $rec->score === null ? null : (float) $rec->score,
+            'verdict' => $rec->verdict,
+            'processedAt' => $rec->processed_at?->toIso8601String(),
+        ];
+
+        if ($includeDetails) {
+            $base['summary'] = $rec->summary;
+            $base['strengths'] = $rec->strengths ?? [];
+            $base['gaps'] = $rec->gaps ?? [];
+            $base['modelVersion'] = $rec->model_version;
+            $base['errorMessage'] = $rec->error_message;
+        }
+
+        return $base;
     }
 }

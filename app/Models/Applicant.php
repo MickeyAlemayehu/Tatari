@@ -16,12 +16,13 @@ class Applicant extends Model
         'resume_path','cover_letter','status','applied_at',
         'reviewed_by','reviewed_at','rejection_reason',
         'location','experience','rating','current_company',
-        'education','notice_period'
+        'education','notice_period','interview_at'
     ];
 
     protected $casts = [
         'applied_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'interview_at' => 'datetime',
         'rating' => 'decimal:1',
     ];
 
@@ -31,5 +32,9 @@ class Applicant extends Model
 
     public function reviewer() {
         return $this->belongsTo(Employee::class, 'reviewed_by');
+    }
+
+    public function recommendation() {
+        return $this->hasOne(ApplicantRecommendation::class);
     }
 }

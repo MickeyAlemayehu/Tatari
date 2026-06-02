@@ -2,11 +2,16 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Company;
 use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Events\LeaveRequestSubmitted;
+use App\Events\LeaveRequestApproved;
+use App\Events\LeaveRequestRejected;
+use App\Events\LeaveRequestCancelled;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -86,6 +91,16 @@ class LeaveManagementController extends Controller
             ], Response::HTTP_UNPROCESSABLE_ENTITY);
         }
 
+        // Maternity/Paternity leave must be taken in full — no partial usage allowed
+        if (str_contains(strtolower($leaveType->name), 'maternity') || str_contains(strtolower($leaveType->name), 'paternity')) {
+            if ($days !== $leaveType->max_days_per_year) {
+                return response()->json([
+                    'message' => "Maternity/Paternity leave must be taken for the full {$leaveType->max_days_per_year} days.",
+                    'required_days' => $leaveType->max_days_per_year,
+                ], Response::HTTP_UNPROCESSABLE_ENTITY);
+            }
+        }
+
         $leaveRequest = LeaveRequest::create([
             'employee_id' => $employee->id,
             'leave_type_id' => $leaveType->id,
@@ -98,6 +113,8 @@ class LeaveManagementController extends Controller
         ]);
 
         $balance->increment('pending_days', $days);
+
+        event(new LeaveRequestSubmitted($leaveRequest));
 
         return response()->json(
             $this->leaveRequestPayload($leaveRequest->load(['employee.department', 'leaveType', 'approver'])),
@@ -139,6 +156,17 @@ class LeaveManagementController extends Controller
             'used_days' => $balance->used_days + $days,
         ]);
 
+        event(new LeaveRequestApproved($leaveRequest->fresh(), $approver));
+
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Approved leave request',
+            module: 'Leave Management',
+            description: "Approved {$days} day(s) leave for {$leaveRequest->employee->first_name} {$leaveRequest->employee->last_name}",
+            employee: $approver,
+            status: 'success'
+        );
+
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }
 
@@ -166,6 +194,17 @@ class LeaveManagementController extends Controller
 
         $balance->update(['pending_days' => max(0, $balance->pending_days - $days)]);
 
+        event(new LeaveRequestRejected($leaveRequest->fresh(), $approver, $data['rejection_reason'] ?? $data['reason'] ?? null));
+
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Rejected leave request',
+            module: 'Leave Management',
+            description: "Rejected {$days} day(s) leave for {$leaveRequest->employee->first_name} {$leaveRequest->employee->last_name}",
+            employee: $approver,
+            status: 'warning'
+        );
+
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }
 
@@ -186,6 +225,8 @@ class LeaveManagementController extends Controller
 
         $leaveRequest->update(['status' => 'cancelled']);
         $balance->update(['pending_days' => max(0, $balance->pending_days - $days)]);
+
+        event(new LeaveRequestCancelled($leaveRequest->fresh()));
 
         return response()->json($this->leaveRequestPayload($leaveRequest->fresh()->load(['employee.department', 'leaveType', 'approver'])));
     }

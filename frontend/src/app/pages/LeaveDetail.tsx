@@ -6,10 +6,12 @@ import { AppLayout } from "../components/AppLayout";
 import { AsyncState } from "../components/AsyncState";
 import { leaveService, type LeaveRequestRecord } from "../../services/leave.service";
 import { ApiError } from "../../lib/api";
+import { useActionSound } from "../hooks/useActionSound";
 
 export function LeaveDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
+  const { playSendSound } = useActionSound();
   const [isProcessing, setIsProcessing] = useState(false);
   const [leaveRequest, setLeaveRequest] = useState<LeaveRequestRecord | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,6 +35,7 @@ export function LeaveDetail() {
     setIsProcessing(true);
     try {
       await leaveService.approve(leaveRequest.id);
+      playSendSound();
       navigate("/leave");
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Failed to approve.");
@@ -49,6 +52,7 @@ export function LeaveDetail() {
     setIsProcessing(true);
     try {
       await leaveService.reject(leaveRequest.id, rejectReason);
+      playSendSound();
       navigate("/leave");
     } catch (err) {
       alert(err instanceof ApiError ? err.message : "Failed to reject.");

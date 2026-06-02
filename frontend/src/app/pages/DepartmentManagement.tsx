@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, Edit, Trash2, X, Save, Building2 } from "lucide-react";
+import { Plus, Edit, Trash2, X, Save, Building2, CheckCircle, Users, Loader2, Mail } from "lucide-react";
 import { AppLayout } from "../components/AppLayout";
 import { AsyncState } from "../components/AsyncState";
-import { departmentsService, type DepartmentRecord } from "../../services/departments.service";
+import { Badge } from "../components/Badge";
+import {
+  departmentsService,
+  type DepartmentRecord,
+  type DepartmentEmployee,
+} from "../../services/departments.service";
+import { employeesService, type EmployeeRecord } from "../../services/employees.service";
 import { ApiError } from "../../lib/api";
 
 type Department = DepartmentRecord;
@@ -13,10 +19,16 @@ export function DepartmentManagement() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    manager_id: number | null;
+  }>({
     name: "",
     description: "",
-    manager: "",
+    manager_id: null,
   });
   const [errors, setErrors] = useState({
     name: "",
@@ -24,13 +36,24 @@ export function DepartmentManagement() {
   });
 
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>([]);
+
+  // View Employees modal state
+  const [viewingDepartment, setViewingDepartment] = useState<Department | null>(null);
+  const [viewEmployees, setViewEmployees] = useState<DepartmentEmployee[]>([]);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await departmentsService.list();
-      setDepartments(res.data);
+      const [deptRes, empRes] = await Promise.all([
+        departmentsService.list(),
+        employeesService.list({ per_page: 1000 }),
+      ]);
+      setDepartments(deptRes.data);
+      setEmployees(empRes.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to load departments.");
     } finally {
@@ -42,31 +65,39 @@ export function DepartmentManagement() {
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!successMessage) return;
+    const t = setTimeout(() => setSuccessMessage(null), 4000);
+    return () => clearTimeout(t);
+  }, [successMessage]);
+
   const handleOpenModal = (department?: Department) => {
     if (department) {
       setEditingDepartment(department);
       setFormData({
         name: department.name,
         description: department.description ?? "",
-        manager: department.manager ?? "",
+        manager_id: department.manager_id ?? null,
       });
     } else {
       setEditingDepartment(null);
       setFormData({
         name: "",
         description: "",
-        manager: "",
+        manager_id: null,
       });
     }
     setErrors({ name: "", description: "" });
+    setSubmitError(null);
     setShowModal(true);
   };
 
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingDepartment(null);
-    setFormData({ name: "", description: "", manager: "" });
+    setFormData({ name: "", description: "", manager_id: null });
     setErrors({ name: "", description: "" });
+    setSubmitError(null);
   };
 
   const validateForm = () => {
@@ -98,25 +129,51 @@ export function DepartmentManagement() {
     if (!validateForm()) return;
 
     setSaving(true);
+    setSubmitError(null);
     try {
       if (editingDepartment) {
         await departmentsService.update(editingDepartment.id, {
           name: formData.name,
           description: formData.description,
+          manager_id: formData.manager_id,
         });
       } else {
         await departmentsService.create({
           name: formData.name,
           description: formData.description,
+          manager_id: formData.manager_id,
         });
       }
+      const verb = editingDepartment ? "updated" : "created";
       await load();
       handleCloseModal();
+      setSuccessMessage(`Department ${verb} successfully.`);
     } catch (err) {
-      alert(err instanceof ApiError ? err.message : "Failed to save department.");
+      setSubmitError(err instanceof ApiError ? err.message : "Failed to save department.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleViewEmployees = async (department: Department) => {
+    setViewingDepartment(department);
+    setViewEmployees([]);
+    setViewError(null);
+    setViewLoading(true);
+    try {
+      const res = await departmentsService.employees(department.id);
+      setViewEmployees(res.data);
+    } catch (err) {
+      setViewError(err instanceof ApiError ? err.message : "Failed to load employees.");
+    } finally {
+      setViewLoading(false);
+    }
+  };
+
+  const handleCloseViewEmployees = () => {
+    setViewingDepartment(null);
+    setViewEmployees([]);
+    setViewError(null);
   };
 
   const handleDelete = async (id: number, name: string) => {
@@ -154,6 +211,21 @@ export function DepartmentManagement() {
 
         {/* Content Area */}
         <main className="flex-1 overflow-y-auto p-6">
+          {successMessage && (
+            <div className="mb-6 p-4 bg-[#DCFCE7] border border-green-200 rounded-lg flex items-start gap-3">
+              <CheckCircle className="w-5 h-5 text-[#22C55E] mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm text-[#22C55E]">{successMessage}</p>
+              </div>
+              <button
+                onClick={() => setSuccessMessage(null)}
+                className="text-[#22C55E] hover:opacity-75"
+                aria-label="Dismiss"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <AsyncState loading={loading} error={error} empty={!loading && departments.length === 0}>
           <div className="bg-white rounded-xl border border-[#E5E7EB]">
             <div className="overflow-x-auto">
@@ -203,6 +275,13 @@ export function DepartmentManagement() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleViewEmployees(department)}
+                            className="p-2 text-[#6B7280] hover:bg-[#EEF2FF] hover:text-[#4F46E5] rounded-lg transition"
+                            title="View employees"
+                          >
+                            <Users className="w-4 h-4" />
+                          </button>
                           <button
                             onClick={() => handleOpenModal(department)}
                             className="p-2 text-[#6B7280] hover:bg-[#ECFEFF] hover:text-blue-600 rounded-lg transition"
@@ -255,6 +334,11 @@ export function DepartmentManagement() {
 
             {/* Modal Body */}
             <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
+              {submitError && (
+                <div className="p-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg text-sm text-[#EF4444]">
+                  {submitError}
+                </div>
+              )}
               {/* Department Name */}
               <div>
                 <label htmlFor="name" className="block text-sm text-[#111827] mb-2">
@@ -310,14 +394,25 @@ export function DepartmentManagement() {
                 <label htmlFor="manager" className="block text-sm text-[#111827] mb-2">
                   Department Manager
                 </label>
-                <input
+                <select
                   id="manager"
-                  type="text"
-                  value={formData.manager}
-                  onChange={(e) => setFormData({ ...formData, manager: e.target.value })}
-                  placeholder="Manager name (optional)"
+                  value={formData.manager_id ?? ""}
+                  onChange={(e) =>
+                    setFormData({
+                      ...formData,
+                      manager_id: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
                   className="w-full px-4 py-2.5 bg-[#F9FAFB] border border-[#E5E7EB] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition"
-                />
+                >
+                  <option value="">No manager</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>
+                      {emp.first_name} {emp.last_name}
+                      {emp.position ? ` — ${emp.position}` : ""}
+                    </option>
+                  ))}
+                </select>
               </div>
 
               {/* Modal Footer */}
@@ -325,19 +420,111 @@ export function DepartmentManagement() {
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-6 py-2.5 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition"
+                  disabled={saving}
+                  className="px-6 py-2.5 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg"
+                  disabled={saving}
+                  className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-6 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <Save className="w-5 h-5" />
                   <span>{saving ? "Saving..." : editingDepartment ? "Update" : "Create"}</span>
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* View Employees Modal */}
+      {viewingDepartment && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E5E7EB]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-[#EEF2FF] rounded-lg flex items-center justify-center">
+                  <Users className="w-5 h-5 text-[#4F46E5]" />
+                </div>
+                <div>
+                  <h2 className="text-lg text-[#111827]">{viewingDepartment.name} Employees</h2>
+                  <p className="text-xs text-[#6B7280]">
+                    {viewLoading
+                      ? "Loading…"
+                      : `${viewEmployees.length} ${viewEmployees.length === 1 ? "employee" : "employees"}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseViewEmployees}
+                className="p-2 text-[#6B7280] hover:bg-[#F9FAFB] rounded-lg transition"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              {viewLoading && (
+                <div className="flex items-center justify-center gap-2 py-12 text-sm text-[#6B7280]">
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Loading employees…
+                </div>
+              )}
+
+              {!viewLoading && viewError && (
+                <div className="p-3 bg-[#FEF2F2] border border-[#EF4444]/20 rounded-lg text-sm text-[#EF4444]">
+                  {viewError}
+                </div>
+              )}
+
+              {!viewLoading && !viewError && viewEmployees.length === 0 && (
+                <div className="py-12 text-center text-sm text-[#6B7280]">
+                  No employees in this department yet.
+                </div>
+              )}
+
+              {!viewLoading && !viewError && viewEmployees.length > 0 && (
+                <ul className="divide-y divide-[#E5E7EB]">
+                  {viewEmployees.map((employee) => (
+                    <li key={employee.id} className="py-3 flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-full flex items-center justify-center text-white text-sm flex-shrink-0">
+                        {employee.avatar}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm text-[#111827] truncate">{employee.name}</p>
+                          <Badge
+                            variant={employee.status === "inactive" ? "default" : "success"}
+                            size="sm"
+                          >
+                            {employee.status === "inactive" ? "Inactive" : "Active"}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-[#6B7280] truncate">
+                          {employee.position ?? "—"}
+                        </p>
+                        <p className="text-xs text-[#6B7280] truncate flex items-center gap-1 mt-0.5">
+                          <Mail className="w-3 h-3" />
+                          {employee.email}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t border-[#E5E7EB] flex justify-end">
+              <button
+                onClick={handleCloseViewEmployees}
+                className="px-5 py-2 border border-[#E5E7EB] text-[#6B7280] rounded-lg hover:bg-[#F9FAFB] transition text-sm"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

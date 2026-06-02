@@ -6,7 +6,15 @@ export interface EmployeeRecord extends Employee {
   position: string;
   department?: { id: number; name: string } | null;
   manager?: { id?: number; first_name?: string; last_name?: string } | null;
+  manager_id?: number | null;
+  phone?: string | null;
+  date_of_birth?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
   created_at?: string;
+  deactivated_at?: string | null;
 }
 
 export const employeesService = {
@@ -31,8 +39,27 @@ export const employeesService = {
     status?: string;
   }) => api.post<EmployeeRecord>("/employees", payload),
 
-  update: (id: number, payload: Partial<EmployeeRecord> & { password?: string }) =>
-    api.patch<EmployeeRecord>(`/employees/${id}`, payload),
+  update: (
+    id: number,
+    payload: Partial<
+      Pick<
+        EmployeeRecord,
+        | "first_name"
+        | "last_name"
+        | "email"
+        | "position"
+        | "department_id"
+        | "manager_id"
+        | "status"
+        | "phone"
+        | "date_of_birth"
+        | "address"
+        | "city"
+        | "state"
+        | "zip_code"
+      >
+    > & { password?: string }
+  ) => api.patch<EmployeeRecord>(`/employees/${id}`, payload),
 
   deactivate: (id: number) => api.post<{ message: string }>(`/employees/${id}/deactivate`),
 };

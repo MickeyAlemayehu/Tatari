@@ -26,6 +26,10 @@ export function ProtectedRoute({ children, permission }: ProtectedRouteProps) {
     return <Navigate to={getLoginPath()} state={{ from: location }} replace />;
   }
 
+  if (employee.must_change_password && location.pathname !== "/change-password") {
+    return <Navigate to="/change-password" replace />;
+  }
+
   if (!hasPermission(permission)) {
     if (location.key === "default") {
       return (

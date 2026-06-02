@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'gemini' => [
+        'api_key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.0-flash'),
+        'recommendation_threshold' => (float) env('GEMINI_RECOMMENDATION_THRESHOLD', 75),
+        'cv_text_limit' => (int) env('GEMINI_CV_TEXT_LIMIT', 30000),
+        'request_timeout' => (int) env('GEMINI_REQUEST_TIMEOUT', 30),
+    ],
+
 ];

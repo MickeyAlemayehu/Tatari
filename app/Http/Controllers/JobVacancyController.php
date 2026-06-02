@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Company;
 use App\Models\Department;
 use App\Models\JobVacancy;
+use App\Jobs\ProcessApplicantRecommendation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -87,9 +88,40 @@ class JobVacancyController extends Controller
             $data['company_id'] = $this->companyIdForDepartment((int) $data['department_id']);
         }
 
+        $scoringFields = ['requirements', 'description', 'responsibilities'];
+        $requiresRescore = false;
+        foreach ($scoringFields as $field) {
+            if (array_key_exists($field, $data) && ($data[$field] ?? '') !== ($jobVacancy->getOriginal($field) ?? '')) {
+                $requiresRescore = true;
+                break;
+            }
+        }
+
         $jobVacancy->update($data);
 
+        if ($requiresRescore) {
+            $this->requeueApplicantRecommendations($jobVacancy);
+        }
+
         return response()->json($this->payload($jobVacancy->fresh()->load(['department', 'company'])->loadCount('applicants'), true));
+    }
+
+    /**
+     * When a vacancy's scoring inputs change, re-queue every applicant so
+     * their AI score reflects the new requirements. Spread the dispatches
+     * out to respect Gemini's free-tier rate limit.
+     */
+    private function requeueApplicantRecommendations(JobVacancy $vacancy): void
+    {
+        $applicants = $vacancy->applicants()->select('id')->get();
+        if ($applicants->isEmpty()) {
+            return;
+        }
+
+        foreach ($applicants->values() as $index => $applicant) {
+            ProcessApplicantRecommendation::dispatch($applicant->id, true)
+                ->delay(now()->addSeconds(15 * $index));
+        }
     }
 
     public function destroy(JobVacancy $jobVacancy): JsonResponse

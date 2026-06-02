@@ -20,6 +20,8 @@ import {
   XCircle,
   Copy,
   ExternalLink,
+  Send,
+  Loader2,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
@@ -110,6 +112,7 @@ export function JobDetails() {
   const [job, setJob] = useState<JobView | null>(null);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
 
   const publicUrl = job ? `${window.location.origin}/careers/${job.id}` : "";
 
@@ -141,6 +144,34 @@ export function JobDetails() {
       }
     })();
   }, [id]);
+
+  const handleDelete = async () => {
+    if (!job) return;
+    if (!window.confirm(`Are you sure you want to delete "${job.title}"? This action cannot be undone.`)) return;
+    setActionLoading(true);
+    try {
+      await jobsService.remove(job.id);
+      navigate("/jobs");
+    } catch (err) {
+      alert("Failed to delete job. It may have applicants.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    if (!job) return;
+    if (!window.confirm(`Publish "${job.title}"? This will make the posting visible to applicants.`)) return;
+    setActionLoading(true);
+    try {
+      await jobsService.update(job.id, { status: "open" });
+      setJob({ ...job, status: "open" });
+    } catch (err) {
+      alert("Failed to publish job.");
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   if (!job) {
     return (
@@ -234,8 +265,30 @@ export function JobDetails() {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-4 py-2 border border-[#EF4444]/20 text-[#EF4444] rounded-lg hover:bg-[#FEF2F2] transition">
-                <Trash2 className="w-4 h-4" />
+              {job.status === "draft" && (
+                <button
+                  onClick={handlePublish}
+                  disabled={actionLoading}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#22C55E] to-[#16A34A] text-white rounded-lg hover:from-[#16A34A] hover:to-[#16A34A] transition shadow-md disabled:opacity-50"
+                >
+                  {actionLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4" />
+                  )}
+                  <span className="hidden sm:inline">Publish</span>
+                </button>
+              )}
+              <button
+                onClick={handleDelete}
+                disabled={actionLoading}
+                className="flex items-center gap-2 px-4 py-2 border border-[#EF4444]/20 text-[#EF4444] rounded-lg hover:bg-[#FEF2F2] transition disabled:opacity-50"
+              >
+                {actionLoading ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
                 <span className="hidden sm:inline">Delete</span>
               </button>
             </div>
@@ -247,21 +300,19 @@ export function JobDetails() {
           <div className="flex gap-6">
             <button
               onClick={() => setActiveTab("overview")}
-              className={`pb-3 px-1 border-b-2 transition ${
-                activeTab === "overview"
+              className={`pb-3 px-1 border-b-2 transition ${activeTab === "overview"
                   ? "border-indigo-600 text-[#4F46E5]"
                   : "border-transparent text-[#6B7280] hover:text-[#111827]"
-              }`}
+                }`}
             >
               <span className="text-sm">Overview</span>
             </button>
             <button
               onClick={() => setActiveTab("applicants")}
-              className={`pb-3 px-1 border-b-2 transition ${
-                activeTab === "applicants"
+              className={`pb-3 px-1 border-b-2 transition ${activeTab === "applicants"
                   ? "border-indigo-600 text-[#4F46E5]"
                   : "border-transparent text-[#6B7280] hover:text-[#111827]"
-              }`}
+                }`}
             >
               <span className="text-sm">Applicants ({applicantCounts.total})</span>
             </button>
@@ -302,11 +353,10 @@ export function JobDetails() {
                         <button
                           type="button"
                           onClick={handleCopyLink}
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition text-sm border ${
-                            linkCopied
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition text-sm border ${linkCopied
                               ? "bg-[#DCFCE7] text-[#22C55E] border-green-200"
                               : "bg-white text-[#4F46E5] border-[#4F46E5]/20 hover:bg-[#EEF2FF]"
-                          }`}
+                            }`}
                         >
                           {linkCopied ? (
                             <>
@@ -498,7 +548,7 @@ export function JobDetails() {
                   <div className="p-4 border-b border-[#E5E7EB]">
                     <h2 className="text-sm text-[#111827]">All Applicants</h2>
                   </div>
-                  
+
                   <div className="divide-y divide-gray-200">
                     {applicants.length === 0 ? (
                       <div className="py-12 text-center">
@@ -539,11 +589,10 @@ export function JobDetails() {
                                     {[1, 2, 3, 4, 5].map((star) => (
                                       <Star
                                         key={star}
-                                        className={`w-4 h-4 ${
-                                          star <= Math.round(applicant.rating!)
+                                        className={`w-4 h-4 ${star <= Math.round(applicant.rating!)
                                             ? "fill-amber-400 text-amber-400"
                                             : "text-gray-300"
-                                        }`}
+                                          }`}
                                       />
                                     ))}
                                   </div>

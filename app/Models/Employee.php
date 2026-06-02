@@ -15,7 +15,8 @@ class Employee extends Authenticatable
         'email','password','first_name','last_name','position',
         'department_id','manager_id','permission_level',
         'permission_override','custom_override','revoked_permissions',
-        'must_change_password','status'
+        'must_change_password','status','deactivated_at',
+        'phone','date_of_birth','address','city','state','zip_code'
     ];
 
     protected $hidden = ['password', 'remember_token', 'api_token'];
@@ -25,7 +26,8 @@ class Employee extends Authenticatable
         'permission_override' => 'array',
         'custom_override' => 'array',
         'revoked_permissions' => 'array',
-        'must_change_password' => 'boolean'
+        'must_change_password' => 'boolean',
+        'date_of_birth' => 'date',
     ];
 
     protected static function booted(): void
@@ -40,6 +42,12 @@ class Employee extends Authenticatable
         static::updating(function (Employee $employee) {
             if ($employee->isDirty('permission_level')) {
                 $employee->permission_level = EmployeePermissions::normalizeLevel((int) $employee->permission_level);
+            }
+        });
+
+        static::updated(function (Employee $employee) {
+            if ($employee->wasChanged('status') && $employee->status === 'inactive') {
+                event(new \App\Events\EmployeeDeactivated($employee));
             }
         });
     }
@@ -91,5 +99,10 @@ class Employee extends Authenticatable
     public function performanceReviewsGiven()
     {
         return $this->hasMany(PerformanceReview::class, 'reviewer_id');
+    }
+
+    public function getFiredAtAttribute()
+    {
+        return $this->deactivated_at;
     }
 }

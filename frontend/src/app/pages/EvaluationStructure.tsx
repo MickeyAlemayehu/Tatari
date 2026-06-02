@@ -1,80 +1,245 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import {
   ArrowLeft,
   Edit,
-  List,
   Star,
-  MessageSquare,
   Users,
   User,
   Briefcase,
   Settings,
+  Loader2,
+  AlertCircle,
+  LayoutTemplate,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
+import {
+  performanceService,
+  type EvaluationTemplateRecord,
+  type EvaluationQuestionRecord,
+} from "../../services/performance.service";
+
+type EvalType = "self" | "peer" | "manager";
+
+interface GroupedQuestions {
+  self: EvaluationQuestionRecord[];
+  peer: EvaluationQuestionRecord[];
+  manager: EvaluationQuestionRecord[];
+}
 
 interface EvaluationCategory {
-  id: number;
   name: string;
-  weight: number;
   questionCount: number;
+}
+
+function deriveCategories(questions: EvaluationQuestionRecord[]): EvaluationCategory[] {
+  const map = new Map<string, number>();
+  for (const q of questions) {
+    const cat = q.category || "General";
+    map.set(cat, (map.get(cat) ?? 0) + 1);
+  }
+  return Array.from(map.entries()).map(([name, questionCount]) => ({ name, questionCount }));
+}
+
+const TYPE_CONFIG: Record<
+  EvalType,
+  {
+    label: string;
+    icon: React.ReactNode;
+    bgColor: string;
+    textColor: string;
+    barColor: string;
+    badgeVariant: "info" | "success" | "default";
+  }
+> = {
+  self: {
+    label: "Self Evaluation",
+    icon: <User className="w-5 h-5 text-blue-600" />,
+    bgColor: "bg-blue-100",
+    textColor: "text-blue-600",
+    barColor: "bg-blue-600",
+    badgeVariant: "info",
+  },
+  peer: {
+    label: "Peer Evaluation",
+    icon: <Users className="w-5 h-5 text-[#22C55E]" />,
+    bgColor: "bg-[#DCFCE7]",
+    textColor: "text-[#22C55E]",
+    barColor: "bg-[#22C55E]",
+    badgeVariant: "success",
+  },
+  manager: {
+    label: "Manager Evaluation",
+    icon: <Briefcase className="w-5 h-5 text-[#4F46E5]" />,
+    bgColor: "bg-[#EEF2FF]",
+    textColor: "text-[#4F46E5]",
+    barColor: "bg-[#4F46E5]",
+    badgeVariant: "default",
+  },
+};
+
+function QuestionTypeIcon({ type }: { type: string }) {
+  switch (type) {
+    case "rating":
+      return <Star className="w-3 h-3" />;
+    default:
+      return null;
+  }
 }
 
 export function EvaluationStructure() {
   const navigate = useNavigate();
 
-  // Evaluation weights
-  const [weights, setWeights] = useState({
-    self: 30,
-    peer: 30,
-    manager: 40,
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [template, setTemplate] = useState<EvaluationTemplateRecord | null>(null);
+  const [grouped, setGrouped] = useState<GroupedQuestions>({
+    self: [],
+    peer: [],
+    manager: [],
   });
 
-  // Categories for each evaluation type
-  const selfCategories: EvaluationCategory[] = [
-    { id: 1, name: "Overall Performance", weight: 25, questionCount: 2 },
-    { id: 2, name: "Accomplishments", weight: 30, questionCount: 1 },
-    { id: 3, name: "Goals Achievement", weight: 25, questionCount: 1 },
-    { id: 4, name: "Development Areas", weight: 20, questionCount: 1 },
-  ];
+  useEffect(() => {
+    let cancelled = false;
 
-  const peerCategories: EvaluationCategory[] = [
-    { id: 1, name: "Collaboration", weight: 35, questionCount: 2 },
-    { id: 2, name: "Team Contribution", weight: 30, questionCount: 1 },
-    { id: 3, name: "Communication", weight: 20, questionCount: 1 },
-    { id: 4, name: "Innovation", weight: 15, questionCount: 1 },
-  ];
+    async function load() {
+      setLoading(true);
+      setError(null);
 
-  const managerCategories: EvaluationCategory[] = [
-    { id: 1, name: "Goals & Objectives", weight: 30, questionCount: 2 },
-    { id: 2, name: "Core Competencies", weight: 25, questionCount: 2 },
-    { id: 3, name: "Leadership", weight: 20, questionCount: 1 },
-    { id: 4, name: "Development", weight: 25, questionCount: 1 },
-  ];
+      try {
+        // 1. Fetch all templates, pick the active one
+        const templatesRes = await performanceService.templates();
+        const templates = templatesRes.data ?? [];
+        const active = templates.find((t) => t.status === "active") ?? null;
 
-  // Sample questions by type
-  const selfQuestions = [
-    "How would you rate your overall performance this quarter?",
-    "What were your major accomplishments this quarter?",
-    "Did you achieve your quarterly goals?",
-    "What areas would you like to develop?",
-  ];
+        if (cancelled) return;
 
-  const peerQuestions = [
-    "Rate the employee's collaboration and teamwork skills",
-    "Provide specific examples of how this employee contributes to team success",
-    "How effective is this employee's communication?",
-    "How would you rate their innovative thinking?",
-  ];
+        if (!active) {
+          setTemplate(null);
+          setGrouped({ self: [], peer: [], manager: [] });
+          setLoading(false);
+          return;
+        }
 
-  const managerQuestions = [
-    "Rate the employee's achievement of goals and objectives",
-    "Assess their performance in core competencies",
-    "Evaluate their leadership potential",
-    "Describe the employee's strengths and areas for development",
-  ];
+        setTemplate(active);
 
+        // 2. Fetch questions for that template
+        const questionsRes = await performanceService.questions({
+          template_id: active.id,
+        });
+        const questions = questionsRes.data ?? [];
+
+        if (cancelled) return;
+
+        // Questions now inherit their evaluation_type from the parent template.
+        const templateType = (active.evaluationType ?? active.evaluation_type ?? "self") as EvalType;
+        const g: GroupedQuestions = { self: [], peer: [], manager: [] };
+        if (templateType === "self" || templateType === "peer" || templateType === "manager") {
+          g[templateType] = questions;
+        }
+
+        setGrouped(g);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load evaluation structure.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Display weights are presentation-only (Self 30 / Peer 30 / Manager 40).
+  // Backend calculations still use template.weights from the database.
+  const weights = { self: 30, peer: 30, manager: 40 };
+
+  // ── Loading ──────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <AppLayout>
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-[#6B7280]">
+            <Loader2 className="w-8 h-8 animate-spin text-[#4F46E5]" />
+            <p className="text-sm">Loading evaluation structure…</p>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ── Error ────────────────────────────────────────────────────────────
+  if (error) {
+    return (
+      <AppLayout>
+        <div className="flex-1 flex items-center justify-center p-8">
+          <div className="flex flex-col items-center gap-3 text-center">
+            <AlertCircle className="w-10 h-10 text-red-400" />
+            <p className="text-sm text-[#111827] font-medium">Could not load structure</p>
+            <p className="text-xs text-[#6B7280]">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 px-4 py-2 bg-[#4F46E5] text-white text-sm rounded-lg hover:bg-[#4338CA] transition"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ── No active template ───────────────────────────────────────────────
+  if (!template) {
+    return (
+      <AppLayout>
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <header className="bg-white border-b border-[#E5E7EB] px-6 py-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => navigate("/performance")}
+                className="p-2 text-[#6B7280] hover:bg-[#F9FAFB] rounded-lg transition"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
+              <div>
+                <h1 className="text-xl text-[#111827]">Evaluation Structure</h1>
+                <p className="text-sm text-[#6B7280]">
+                  Manage evaluation types, questions, and weighting
+                </p>
+              </div>
+            </div>
+          </header>
+          <main className="flex-1 flex items-center justify-center p-8">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="w-16 h-16 bg-[#EEF2FF] rounded-2xl flex items-center justify-center">
+                <LayoutTemplate className="w-8 h-8 text-[#4F46E5]" />
+              </div>
+              <p className="text-sm font-medium text-[#111827]">No active template</p>
+              <p className="text-xs text-[#6B7280] max-w-xs">
+                There is no active evaluation template. Go to the Evaluation Builder to create and
+                activate one.
+              </p>
+              <button
+                onClick={() => navigate("/performance/builder")}
+                className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg"
+              >
+                <Edit className="w-4 h-4" />
+                <span>Open Builder</span>
+              </button>
+            </div>
+          </main>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  // ── Main view ────────────────────────────────────────────────────────
   return (
     <AppLayout>
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -91,7 +256,8 @@ export function EvaluationStructure() {
               <div>
                 <h1 className="text-xl text-[#111827]">Evaluation Structure</h1>
                 <p className="text-sm text-[#6B7280]">
-                  Manage evaluation types, questions, and weighting
+                  Active template:{" "}
+                  <span className="font-medium text-[#4F46E5]">{template.title}</span>
                 </p>
               </div>
             </div>
@@ -105,10 +271,10 @@ export function EvaluationStructure() {
           </div>
         </header>
 
-        {/* Content Area */}
+        {/* Content */}
         <main className="flex-1 overflow-y-auto p-6">
           <div className="max-w-7xl mx-auto space-y-6">
-            {/* Evaluation Weight Distribution */}
+            {/* Weight Distribution */}
             <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
               <div className="flex items-center gap-2 mb-6">
                 <Settings className="w-5 h-5 text-[#4F46E5]" />
@@ -116,59 +282,31 @@ export function EvaluationStructure() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="border border-[#E5E7EB] rounded-lg p-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <User className="w-5 h-5 text-blue-600" />
+                {(["self", "peer", "manager"] as EvalType[]).map((type) => {
+                  const cfg = TYPE_CONFIG[type];
+                  const w = weights[type] ?? 0;
+                  return (
+                    <div key={type} className="border border-[#E5E7EB] rounded-lg p-5">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div
+                          className={`w-10 h-10 ${cfg.bgColor} rounded-lg flex items-center justify-center`}
+                        >
+                          {cfg.icon}
+                        </div>
+                        <div>
+                          <h3 className="text-sm text-[#111827]">{cfg.label}</h3>
+                          <p className="text-2xl text-[#111827]">{w}%</p>
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div
+                          className={`${cfg.barColor} h-2 rounded-full transition-all`}
+                          style={{ width: `${w}%` }}
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="text-sm text-[#111827]">Self Evaluation</h3>
-                      <p className="text-2xl text-[#111827]">{weights.self}%</p>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-blue-600 h-2 rounded-full transition-all"
-                      style={{ width: `${weights.self}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="border border-[#E5E7EB] rounded-lg p-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
-                      <Users className="w-5 h-5 text-[#22C55E]" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm text-[#111827]">Peer Evaluation</h3>
-                      <p className="text-2xl text-[#111827]">{weights.peer}%</p>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-[#22C55E] h-2 rounded-full transition-all"
-                      style={{ width: `${weights.peer}%` }}
-                    />
-                  </div>
-                </div>
-
-                <div className="border border-[#E5E7EB] rounded-lg p-5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-[#EEF2FF] rounded-lg flex items-center justify-center">
-                      <Briefcase className="w-5 h-5 text-[#4F46E5]" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm text-[#111827]">Manager Evaluation</h3>
-                      <p className="text-2xl text-[#111827]">{weights.manager}%</p>
-                    </div>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-[#4F46E5] h-2 rounded-full transition-all"
-                      style={{ width: `${weights.manager}%` }}
-                    />
-                  </div>
-                </div>
+                  );
+                })}
               </div>
 
               <div className="mt-6 p-4 bg-[#ECFEFF] border border-[#06B6D4]/20 rounded-lg">
@@ -179,191 +317,110 @@ export function EvaluationStructure() {
               </div>
             </div>
 
-            {/* Self Evaluation Structure */}
-            <div className="bg-white rounded-xl border border-[#E5E7EB]">
-              <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <User className="w-5 h-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm text-[#111827]">Self Evaluation</h2>
-                    <p className="text-xs text-[#6B7280]">
-                      {selfQuestions.length} questions • {weights.self}% weight
-                    </p>
-                  </div>
-                </div>
-                <Badge variant="info" size="sm">
-                  {selfQuestions.length} Questions
-                </Badge>
-              </div>
+            {/* Per-type sections */}
+            {(["self", "peer", "manager"] as EvalType[]).map((type) => {
+              const cfg = TYPE_CONFIG[type];
+              const questions = grouped[type];
+              const categories = deriveCategories(questions);
+              const w = weights[type] ?? 0;
 
-              <div className="p-6">
-                <h3 className="text-sm text-[#111827] mb-4">Categories</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  {selfCategories.map((category) => (
-                    <div
-                      key={category.id}
-                      className="border border-[#E5E7EB] rounded-lg p-4"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm text-[#111827]">{category.name}</h4>
-                        <span className="text-xs text-[#6B7280]">{category.weight}%</span>
+              return (
+                <div key={type} className="bg-white rounded-xl border border-[#E5E7EB]">
+                  {/* Section header */}
+                  <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-10 h-10 ${cfg.bgColor} rounded-lg flex items-center justify-center`}
+                      >
+                        {cfg.icon}
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                        <div
-                          className="bg-blue-600 h-1.5 rounded-full transition-all"
-                          style={{ width: `${category.weight}%` }}
-                        />
+                      <div>
+                        <h2 className="text-sm text-[#111827]">{cfg.label}</h2>
+                        <p className="text-xs text-[#6B7280]">
+                          {questions.length} question{questions.length !== 1 ? "s" : ""} •{" "}
+                          {w}% weight
+                        </p>
                       </div>
-                      <p className="text-xs text-[#6B7280]">
-                        {category.questionCount} question
-                        {category.questionCount !== 1 ? "s" : ""}
+                    </div>
+                    <Badge variant={cfg.badgeVariant} size="sm">
+                      {questions.length} Questions
+                    </Badge>
+                  </div>
+
+                  <div className="p-6">
+                    {questions.length === 0 ? (
+                      <p className="text-sm text-[#6B7280] italic text-center py-4">
+                        No questions added for this evaluation type yet.
                       </p>
-                    </div>
-                  ))}
-                </div>
+                    ) : (
+                      <>
+                        {/* Categories */}
+                        {categories.length > 0 && (
+                          <>
+                            <h3 className="text-sm text-[#111827] mb-4">Categories</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                              {categories.map((cat) => (
+                                <div
+                                  key={cat.name}
+                                  className="border border-[#E5E7EB] rounded-lg p-4"
+                                >
+                                  <div className="flex items-center justify-between mb-2">
+                                    <h4 className="text-sm text-[#111827]">{cat.name}</h4>
+                                    <span className="text-xs text-[#6B7280]">
+                                      {cat.questionCount} Q
+                                    </span>
+                                  </div>
+                                  <p className="text-xs text-[#6B7280]">
+                                    {cat.questionCount} question
+                                    {cat.questionCount !== 1 ? "s" : ""}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        )}
 
-                <h3 className="text-sm text-[#111827] mb-4">Questions</h3>
-                <div className="space-y-3">
-                  {selfQuestions.map((question, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]"
-                    >
-                      <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0 text-blue-600 text-sm">
-                        {index + 1}
-                      </div>
-                      <p className="text-sm text-[#111827] flex-1">{question}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Peer Evaluation Structure */}
-            <div className="bg-white rounded-xl border border-[#E5E7EB]">
-              <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#DCFCE7] rounded-lg flex items-center justify-center">
-                    <Users className="w-5 h-5 text-[#22C55E]" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm text-[#111827]">Peer Evaluation</h2>
-                    <p className="text-xs text-[#6B7280]">
-                      {peerQuestions.length} questions • {weights.peer}% weight
-                    </p>
-                  </div>
-                </div>
-                <Badge variant="success" size="sm">
-                  {peerQuestions.length} Questions
-                </Badge>
-              </div>
-
-              <div className="p-6">
-                <h3 className="text-sm text-[#111827] mb-4">Categories</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  {peerCategories.map((category) => (
-                    <div
-                      key={category.id}
-                      className="border border-[#E5E7EB] rounded-lg p-4"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm text-[#111827]">{category.name}</h4>
-                        <span className="text-xs text-[#6B7280]">{category.weight}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                        <div
-                          className="bg-[#22C55E] h-1.5 rounded-full transition-all"
-                          style={{ width: `${category.weight}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-[#6B7280]">
-                        {category.questionCount} question
-                        {category.questionCount !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <h3 className="text-sm text-[#111827] mb-4">Questions</h3>
-                <div className="space-y-3">
-                  {peerQuestions.map((question, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]"
-                    >
-                      <div className="w-8 h-8 bg-[#DCFCE7] rounded-lg flex items-center justify-center flex-shrink-0 text-[#22C55E] text-sm">
-                        {index + 1}
-                      </div>
-                      <p className="text-sm text-[#111827] flex-1">{question}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Manager Evaluation Structure */}
-            <div className="bg-white rounded-xl border border-[#E5E7EB]">
-              <div className="px-6 py-4 border-b border-[#E5E7EB] flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#EEF2FF] rounded-lg flex items-center justify-center">
-                    <Briefcase className="w-5 h-5 text-[#4F46E5]" />
-                  </div>
-                  <div>
-                    <h2 className="text-sm text-[#111827]">Manager Evaluation</h2>
-                    <p className="text-xs text-[#6B7280]">
-                      {managerQuestions.length} questions • {weights.manager}% weight
-                    </p>
+                        {/* Questions list */}
+                        <h3 className="text-sm text-[#111827] mb-4">Questions</h3>
+                        <div className="space-y-3">
+                          {questions.map((q, index) => (
+                            <div
+                              key={q.id}
+                              className="flex items-start gap-3 p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]"
+                            >
+                              <div
+                                className={`w-8 h-8 ${cfg.bgColor} rounded-lg flex items-center justify-center flex-shrink-0 ${cfg.textColor} text-sm`}
+                              >
+                                {index + 1}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm text-[#111827]">{q.text}</p>
+                                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                                  {q.category && (
+                                    <span className="text-xs text-[#6B7280] bg-white border border-[#E5E7EB] px-2 py-0.5 rounded-full">
+                                      {q.category}
+                                    </span>
+                                  )}
+                                  {q.type && (
+                                    <span className="text-xs text-[#6B7280] flex items-center gap-1">
+                                      <QuestionTypeIcon type={q.type} />
+                                      {q.type}
+                                    </span>
+                                  )}
+                                  {q.required && (
+                                    <span className="text-xs text-red-500">Required</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-                <Badge variant="default" size="sm">
-                  {managerQuestions.length} Questions
-                </Badge>
-              </div>
-
-              <div className="p-6">
-                <h3 className="text-sm text-[#111827] mb-4">Categories</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                  {managerCategories.map((category) => (
-                    <div
-                      key={category.id}
-                      className="border border-[#E5E7EB] rounded-lg p-4"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="text-sm text-[#111827]">{category.name}</h4>
-                        <span className="text-xs text-[#6B7280]">{category.weight}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-1.5 mb-2">
-                        <div
-                          className="bg-[#4F46E5] h-1.5 rounded-full transition-all"
-                          style={{ width: `${category.weight}%` }}
-                        />
-                      </div>
-                      <p className="text-xs text-[#6B7280]">
-                        {category.questionCount} question
-                        {category.questionCount !== 1 ? "s" : ""}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-
-                <h3 className="text-sm text-[#111827] mb-4">Questions</h3>
-                <div className="space-y-3">
-                  {managerQuestions.map((question, index) => (
-                    <div
-                      key={index}
-                      className="flex items-start gap-3 p-4 bg-[#F9FAFB] rounded-lg border border-[#E5E7EB]"
-                    >
-                      <div className="w-8 h-8 bg-[#EEF2FF] rounded-lg flex items-center justify-center flex-shrink-0 text-[#4F46E5] text-sm">
-                        {index + 1}
-                      </div>
-                      <p className="text-sm text-[#111827] flex-1">{question}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </main>
       </div>

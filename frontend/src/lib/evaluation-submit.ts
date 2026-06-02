@@ -1,19 +1,54 @@
-import { averageRating } from "./evaluation-helpers";
+/**
+ * Builds the canonical evaluation-submit payload. Answers now use the
+ * backend's canonical shape: `{ question_id, rating?, selected_options?,
+ * text_answer? }`. The backend re-computes the score via
+ * EvaluationScoreService, so the client no longer sends `score` — that
+ * keeps the backend the source of truth and avoids stale client-side
+ * weighting if the template was edited mid-session.
+ */
 
-export interface EvaluationAnswer {
+export interface EvaluationAnswerInput {
   questionId: number;
-  rating?: number;
-  text?: string;
+  rating?: number | null;
+  text?: string | null;
+  selectedOptions?: number[] | null;
 }
 
-export function buildEvaluationPayload(answers: EvaluationAnswer[]) {
-  const ratings = answers.filter((a) => a.rating).map((a) => ({ rating: a.rating }));
-  const textParts = answers.filter((a) => a.text?.trim()).map((a) => a.text!.trim());
-  const score = averageRating(answers.map((a) => a.rating ?? 0));
+export interface SubmittedAnswer {
+  question_id: number;
+  rating?: number;
+  text_answer?: string;
+  selected_options?: number[];
+}
+
+export function buildEvaluationPayload(answers: EvaluationAnswerInput[]) {
+  const submitted: SubmittedAnswer[] = answers
+    .filter(
+      (a) =>
+        (typeof a.rating === "number" && Number.isFinite(a.rating)) ||
+        (a.text && a.text.trim().length > 0) ||
+        (Array.isArray(a.selectedOptions) && a.selectedOptions.length > 0)
+    )
+    .map((a) => {
+      const entry: SubmittedAnswer = { question_id: a.questionId };
+      if (typeof a.rating === "number" && Number.isFinite(a.rating)) {
+        entry.rating = a.rating;
+      }
+      if (a.text && a.text.trim().length > 0) {
+        entry.text_answer = a.text.trim();
+      }
+      if (Array.isArray(a.selectedOptions) && a.selectedOptions.length > 0) {
+        entry.selected_options = a.selectedOptions;
+      }
+      return entry;
+    });
+
+  const textParts = answers
+    .filter((a) => a.text?.trim())
+    .map((a) => a.text!.trim());
 
   return {
-    score: score || undefined,
-    answers: ratings,
+    answers: submitted,
     comments: textParts.length ? textParts.join("\n\n") : undefined,
   };
 }

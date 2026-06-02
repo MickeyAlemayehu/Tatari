@@ -14,18 +14,22 @@ import {
   Check,
   X,
   CalendarRange,
+  Clock,
 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
-import { leaveService, type LeaveRequestRecord, type LeaveTypeRecord } from "../../services/leave.service";
+import { leaveService, type LeaveBalanceRecord, type LeaveRequestRecord, type LeaveTypeRecord } from "../../services/leave.service";
 import { ApiError } from "../../lib/api";
+import { usePermissions } from "../../hooks/usePermissions";
+import { balanceColor } from "../../lib/utils";
 
-type TabType = "overview" | "request" | "history" | "approvals" | "calendar";
+type TabType = "request" | "history" | "approvals" | "calendar" | "balance";
 
 interface LeaveBalance {
   type: string;
   total: number;
   used: number;
+  pending: number;
   remaining: number;
   color: string;
 }
@@ -62,13 +66,17 @@ interface PendingLeaveRequest {
 export function LeaveManagement() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { permissionLevel } = usePermissions();
+  
   const tabParam = searchParams.get("tab") as TabType | null;
-  const [activeTab, setActiveTab] = useState<TabType>(tabParam || "overview");
+  const [activeTab, setActiveTab] = useState<TabType>(
+    (tabParam && tabParam !== "overview" as any) ? tabParam : ((permissionLevel ?? 0) >= 2 ? "request" : "history")
+  );
 
   // Update active tab when URL changes
   useEffect(() => {
     const tab = searchParams.get("tab") as TabType | null;
-    if (tab && ["overview", "request", "history", "approvals", "calendar"].includes(tab)) {
+    if (tab && ["request", "history", "approvals", "calendar", "balance"].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -77,26 +85,6 @@ export function LeaveManagement() {
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
     setSearchParams({ tab });
-  };
-
-  const [totalEmployees, setTotalEmployees] = useState(0);
-  const [totalLeaveRequests, setTotalLeaveRequests] = useState(0);
-  const [pendingLeaveRequests, setPendingLeaveRequests] = useState(0);
-  const [approvedLeaveRequests, setApprovedLeaveRequests] = useState(0);
-  const [rejectedLeaveRequests, setRejectedLeaveRequests] = useState(0);
-
-  useEffect(() => {
-    void leaveService.summary().then((s) => {
-      setTotalEmployees(s.totalEmployees);
-      setTotalLeaveRequests(s.totalLeaveRequests);
-      setPendingLeaveRequests(s.pendingLeaveRequests);
-      setApprovedLeaveRequests(s.approvedLeaveRequests);
-      setRejectedLeaveRequests(s.rejectedLeaveRequests);
-    }).catch(() => {});
-  }, []);
-
-  const calculatePercentage = (used: number, total: number) => {
-    return Math.round((used / total) * 100);
   };
 
   const formatDate = (dateStr: string) => {
@@ -109,12 +97,34 @@ export function LeaveManagement() {
   };
 
   const tabs = [
-    { id: "overview" as TabType, label: "Overview", icon: TrendingUp },
-    { id: "request" as TabType, label: "Request Leave", icon: Plus },
+    ...((permissionLevel ?? 0) >= 2 ? [{ id: "request" as TabType, label: "Request Leave", icon: Plus }] : []),
     { id: "history" as TabType, label: "Leave History", icon: History },
+    ...((permissionLevel ?? 0) >= 2 ? [{ id: "balance" as TabType, label: "Leave Balance", icon: TrendingUp }] : []),
     { id: "approvals" as TabType, label: "Approvals", icon: CheckCircle },
     { id: "calendar" as TabType, label: "Calendar", icon: CalendarRange },
   ];
+
+  const [leaveBalances, setLeaveBalances] = useState<LeaveBalance[]>([]);
+
+  useEffect(() => {
+    if ((permissionLevel ?? 0) >= 2) {
+      void leaveService.myBalances()
+        .then((res) => setLeaveBalances(
+          res.data.map((b: LeaveBalanceRecord, i: number) => ({
+            type: b.type ?? "Leave",
+            total: b.total,
+            used: b.used,
+            pending: b.pending,
+            remaining: b.remaining,
+            color: balanceColor(i),
+          }))
+        ))
+        .catch(() => {});
+    }
+  }, [permissionLevel]);
+
+  const calculatePercentage = (used: number, total: number) =>
+    Math.round((used / total) * 100);
 
   return (
     <AppLayout>
@@ -128,13 +138,15 @@ export function LeaveManagement() {
                 Manage leave requests, balances, and approvals
               </p>
             </div>
-            <button
-              onClick={() => handleTabChange("request")}
-              className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
-            >
-              <Plus className="w-5 h-5" />
-              <span>New Request</span>
-            </button>
+            {(permissionLevel ?? 0) >= 2 && (
+              <button
+                onClick={() => handleTabChange("request")}
+                className="flex items-center gap-2 bg-gradient-to-r from-[#4F46E5] to-[#4338CA] text-white px-4 py-2.5 rounded-lg hover:from-[#4338CA] hover:to-[#4338CA] transition shadow-lg hover:shadow-xl"
+              >
+                <Plus className="w-5 h-5" />
+                <span>New Request</span>
+              </button>
+            )}
           </div>
         </header>
 
@@ -163,16 +175,14 @@ export function LeaveManagement() {
 
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto bg-[#F9FAFB]">
-          {activeTab === "overview" && <OverviewTab
-            totalEmployees={totalEmployees}
-            totalLeaveRequests={totalLeaveRequests}
-            pendingLeaveRequests={pendingLeaveRequests}
-            approvedLeaveRequests={approvedLeaveRequests}
-            rejectedLeaveRequests={rejectedLeaveRequests}
-            formatDate={formatDate}
-          />}
           {activeTab === "request" && <RequestLeaveTab />}
           {activeTab === "history" && <LeaveHistoryTab formatDate={formatDate} />}
+          {activeTab === "balance" && (
+            <ManagerLeaveBalanceTab
+              leaveBalances={leaveBalances}
+              calculatePercentage={calculatePercentage}
+            />
+          )}
           {activeTab === "approvals" && <ApprovalsTab formatDate={formatDate} />}
           {activeTab === "calendar" && <CalendarTab formatDate={formatDate} />}
         </div>
@@ -438,6 +448,23 @@ function RequestLeaveTab() {
     reason: "",
   });
 
+  // Check if selected leave type requires full allocation (e.g. Maternity/Paternity)
+  const selectedTypeRecord = leaveTypes.find((t) => t.name === leaveType);
+  const isFixedDuration =
+    !!selectedTypeRecord &&
+    (selectedTypeRecord.name.toLowerCase().includes("maternity") ||
+      selectedTypeRecord.name.toLowerCase().includes("paternity"));
+  const fixedDays = isFixedDuration ? selectedTypeRecord.maxDaysPerYear : 0;
+
+  // Auto-set end date when start date changes for fixed-duration leave
+  useEffect(() => {
+    if (isFixedDuration && startDate && fixedDays > 0) {
+      const start = new Date(startDate);
+      start.setDate(start.getDate() + fixedDays - 1);
+      setEndDate(start.toISOString().split("T")[0] || "");
+    }
+  }, [isFixedDuration, startDate, fixedDays]);
+
   const validateForm = () => {
     const newErrors = {
       leaveType: "",
@@ -522,12 +549,15 @@ function RequestLeaveTab() {
     switch (field) {
       case "leaveType":
         setLeaveType(value);
+        // Reset dates when switching leave type
+        setStartDate("");
+        setEndDate("");
         break;
       case "startDate":
         setStartDate(value);
         break;
       case "endDate":
-        setEndDate(value);
+        if (!isFixedDuration) setEndDate(value);
         break;
       case "reason":
         setReason(value);
@@ -593,6 +623,7 @@ function RequestLeaveTab() {
                 <input
                   id="startDate"
                   type="date"
+                  min={new Date().toISOString().split('T')[0]}
                   value={startDate}
                   onChange={(e) => handleFieldChange("startDate", e.target.value)}
                   className={`w-full px-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition ${
@@ -616,13 +647,15 @@ function RequestLeaveTab() {
                 <input
                   id="endDate"
                   type="date"
+                  min={startDate || new Date().toISOString().split('T')[0]}
                   value={endDate}
                   onChange={(e) => handleFieldChange("endDate", e.target.value)}
+                  disabled={isFixedDuration}
                   className={`w-full px-4 py-2.5 bg-[#F9FAFB] border rounded-lg focus:outline-none focus:ring-2 transition ${
                     errors.endDate
                       ? "border-[#EF4444]/30 focus:ring-[#EF4444]"
                       : "border-[#E5E7EB] focus:ring-[#4F46E5] focus:border-transparent"
-                  }`}
+                  } ${isFixedDuration ? "opacity-60 cursor-not-allowed" : ""}`}
                 />
                 {errors.endDate && (
                   <div className="mt-2 flex items-center gap-1 text-[#EF4444]">
@@ -644,6 +677,17 @@ function RequestLeaveTab() {
                     <strong>Duration:</strong> {days} {days === 1 ? "day" : "days"}
                   </p>
                 </div>
+              </div>
+            )}
+
+            {/* Fixed-duration leave notice */}
+            {isFixedDuration && (
+              <div className="p-4 bg-[#FEF3C7] border border-[#F59E0B]/20 rounded-lg flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-[#F59E0B] mt-0.5 flex-shrink-0" />
+                <p className="text-sm text-[#92400E]">
+                  <strong>Maternity/Paternity leave</strong> must be taken for the full {fixedDays} days.
+                  The end date is automatically calculated based on your start date.
+                </p>
               </div>
             )}
 
@@ -905,30 +949,6 @@ function LeaveHistoryTab({ formatDate }: { formatDate: (dateStr: string) => stri
                           <Eye className="w-4 h-4" />
                           View
                         </button>
-                        {request.status === "pending" && (
-                          <>
-                            <button
-                              onClick={() => {
-                                alert(`Approved leave request for ${request.employee}`);
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm text-[#22C55E] hover:bg-[#DCFCE7] rounded-lg transition"
-                              title="Approve"
-                            >
-                              <Check className="w-4 h-4" />
-                              Approve
-                            </button>
-                            <button
-                              onClick={() => {
-                                alert(`Rejected leave request for ${request.employee}`);
-                              }}
-                              className="flex items-center gap-1 px-3 py-1.5 text-sm text-[#EF4444] hover:bg-[#FEF2F2] rounded-lg transition"
-                              title="Reject"
-                            >
-                              <X className="w-4 h-4" />
-                              Reject
-                            </button>
-                          </>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -1371,6 +1391,164 @@ function CalendarTab({ formatDate }: { formatDate: (dateStr: string) => string }
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Manager Leave Balance Tab — mirrors the level-1 LeaveBalanceTab
+function ManagerLeaveBalanceTab({
+  leaveBalances,
+  calculatePercentage,
+}: {
+  leaveBalances: LeaveBalance[];
+  calculatePercentage: (used: number, total: number) => number;
+}) {
+  const totalLeave = leaveBalances.reduce((s, b) => s + b.total, 0);
+  const usedLeave = leaveBalances.reduce((s, b) => s + b.used, 0);
+  const pendingLeave = leaveBalances.reduce((s, b) => s + b.pending, 0);
+  const remainingLeave = leaveBalances.reduce((s, b) => s + b.remaining, 0);
+
+  return (
+    <div className="p-6 space-y-6">
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Total Leave */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#4F46E5] to-[#4338CA] rounded-lg flex items-center justify-center">
+              <Calendar className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-xs text-[#6B7280]">Annual Quota</span>
+          </div>
+          <p className="text-sm text-[#6B7280] mb-1">Total Leave</p>
+          <p className="text-3xl text-[#111827] mb-2">{totalLeave}</p>
+          <p className="text-xs text-[#6B7280]">days per year</p>
+        </div>
+
+        {/* Used Leave */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#F59E0B] to-[#F59E0B] rounded-lg flex items-center justify-center">
+              <TrendingUp className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-xs text-[#6B7280]">
+              {calculatePercentage(usedLeave, totalLeave)}% Used
+            </span>
+          </div>
+          <p className="text-sm text-[#6B7280] mb-1">Used Leave</p>
+          <p className="text-3xl text-[#111827] mb-2">{usedLeave}</p>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-gradient-to-r from-[#F59E0B] to-[#F59E0B] h-2 rounded-full transition-all"
+              style={{ width: `${calculatePercentage(usedLeave, totalLeave)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Pending Leave */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#3B82F6] to-[#2563EB] rounded-lg flex items-center justify-center">
+              <Clock className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-xs text-[#6B7280]">
+              {calculatePercentage(pendingLeave, totalLeave)}% Pending
+            </span>
+          </div>
+          <p className="text-sm text-[#6B7280] mb-1">Pending Leave</p>
+          <p className="text-3xl text-[#111827] mb-2">{pendingLeave}</p>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-gradient-to-r from-[#3B82F6] to-[#2563EB] h-2 rounded-full transition-all"
+              style={{ width: `${calculatePercentage(pendingLeave, totalLeave)}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Remaining Leave */}
+        <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+          <div className="flex items-start justify-between mb-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-[#22C55E] to-[#22C55E] rounded-lg flex items-center justify-center">
+              <AlertCircle className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-xs text-[#6B7280]">
+              {calculatePercentage(remainingLeave, totalLeave)}% Left
+            </span>
+          </div>
+          <p className="text-sm text-[#6B7280] mb-1">Remaining Leave</p>
+          <p className="text-3xl text-[#111827] mb-2">{remainingLeave}</p>
+          <div className="w-full bg-gray-200 rounded-full h-2">
+            <div
+              className="bg-gradient-to-r from-[#22C55E] to-[#22C55E] h-2 rounded-full transition-all"
+              style={{ width: `${calculatePercentage(remainingLeave, totalLeave)}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Leave Balance by Type */}
+      <div className="bg-white rounded-xl border border-[#E5E7EB]">
+        <div className="px-6 py-4 border-b border-[#E5E7EB]">
+          <h2 className="text-sm text-[#111827]">Leave Balance by Type</h2>
+          <p className="text-xs text-[#6B7280] mt-1">Breakdown of your leave allocation</p>
+        </div>
+        <div className="p-6">
+          {leaveBalances.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-[#6B7280]">
+              <Calendar className="w-12 h-12 mb-3" />
+              <p className="text-sm">No leave balance data available</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {leaveBalances.map((balance, index) => (
+                <div
+                  key={index}
+                  className="border border-[#E5E7EB] rounded-lg p-4 hover:border-[#4F46E5]/30 transition"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-sm text-[#111827]">{balance.type}</h3>
+                    <span className="text-xs text-[#6B7280]">
+                      {calculatePercentage(balance.used, balance.total)}% used
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-3 mb-3">
+                    <div>
+                      <p className="text-xs text-[#6B7280] mb-1">Total</p>
+                      <p className="text-lg text-[#111827]">{balance.total}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#6B7280] mb-1">Used</p>
+                      <p className="text-lg text-[#F59E0B]">{balance.used}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#6B7280] mb-1">Pending</p>
+                      <p className="text-lg text-[#3B82F6]">{balance.pending}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-[#6B7280] mb-1">Left</p>
+                      <p className="text-lg text-[#22C55E]">{balance.remaining}</p>
+                    </div>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className={`bg-gradient-to-r ${balance.color} h-2 rounded-full transition-all`}
+                      style={{ width: `${calculatePercentage(balance.used, balance.total)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Info Card */}
+      <div className="bg-[#ECFEFF] border border-[#06B6D4]/20 rounded-lg p-4">
+        <p className="text-sm text-[#06B6D4]">
+          <strong>Note:</strong> Leave balances are updated in real-time. Unused annual leave
+          days may be carried forward to the next year based on company policy (maximum 5 days).
+        </p>
       </div>
     </div>
   );

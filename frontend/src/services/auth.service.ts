@@ -85,6 +85,16 @@ export async function login(email: string, password: string): Promise<AuthSessio
   return session;
 }
 
+export async function changeMyPassword(
+  currentPassword: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return api.post<{ message: string }>("/me/password", {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
 export async function logout(): Promise<void> {
   const token = getStoredToken();
   if (token) {

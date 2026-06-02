@@ -8,6 +8,7 @@ use App\Models\Employee;
 use App\Models\LeaveBalance;
 use App\Models\LeaveRequest;
 use App\Models\LeaveType;
+use App\Models\Notification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -46,6 +47,41 @@ class LeaveManagementTest extends TestCase
             'leave_type_id' => $leaveType->id,
             'pending_days' => 5,
         ]);
+    }
+
+    public function test_employee_leave_submission_notifies_leave_approvers(): void
+    {
+        [$employee, $leaveType] = $this->employeeWithLeaveType();
+        $approver = Employee::factory()->manager()->create([
+            'permission_override' => ['approve_leave' => true],
+        ]);
+
+        LeaveBalance::create([
+            'employee_id' => $employee->id,
+            'leave_type_id' => $leaveType->id,
+            'year' => 2026,
+            'allocated_days' => 20,
+            'used_days' => 0,
+            'pending_days' => 0,
+            'carried_forward_days' => 0,
+        ]);
+
+        $this->actingAs($employee, 'api')->postJson('/api/leave-requests', [
+            'leave_type_id' => $leaveType->id,
+            'start_date' => '2026-05-15',
+            'end_date' => '2026-05-16',
+            'reason' => 'Family vacation',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('notifications', [
+            'recipient_type' => Employee::class,
+            'recipient_id' => $approver->id,
+            'title' => 'New leave request',
+            'notification_type' => 'leave',
+            'is_read' => false,
+        ]);
+
+        $this->assertSame(1, Notification::where('recipient_id', $approver->id)->count());
     }
 
     public function test_employee_can_view_own_leave_requests_and_balances(): void

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import { Calendar, TrendingUp, AlertCircle, History, Plus, Download } from "lucide-react";
+import { Calendar, TrendingUp, AlertCircle, History, Plus, Download, Clock } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { AppLayout } from "../components/AppLayout";
 import { leaveService, type LeaveBalanceRecord } from "../../services/leave.service";
@@ -19,6 +19,7 @@ interface LeaveBalanceView {
   type: string;
   total: number;
   used: number;
+  pending: number;
   remaining: number;
   color: string;
 }
@@ -38,6 +39,7 @@ export function LeaveBalance() {
             type: b.type ?? "Leave",
             total: b.total,
             used: b.used,
+            pending: b.pending,
             remaining: b.remaining,
             color: BALANCE_COLORS[i % BALANCE_COLORS.length] ?? BALANCE_COLORS[0] ?? "from-[#4F46E5] to-[#4338CA]",
           }))
@@ -52,6 +54,7 @@ export function LeaveBalance() {
 
   const totalLeave = leaveBalances.reduce((s, b) => s + b.total, 0);
   const usedLeave = leaveBalances.reduce((s, b) => s + b.used, 0);
+  const pendingLeave = leaveBalances.reduce((s, b) => s + b.pending, 0);
   const remainingLeave = leaveBalances.reduce((s, b) => s + b.remaining, 0);
 
   const formatDate = (dateStr: string) => {
@@ -97,7 +100,7 @@ export function LeaveBalance() {
         <main className="flex-1 overflow-y-auto p-6">
           <AsyncState loading={loading} error={error}>
           {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
             {/* Total Leave */}
             <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
               <div className="flex items-start justify-between mb-4">
@@ -127,6 +130,26 @@ export function LeaveBalance() {
                 <div
                   className="bg-gradient-to-r from-[#F59E0B] to-[#F59E0B] h-2 rounded-full transition-all"
                   style={{ width: `${calculatePercentage(usedLeave, totalLeave)}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Pending Leave */}
+            <div className="bg-white rounded-xl border border-[#E5E7EB] p-6">
+              <div className="flex items-start justify-between mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-[#3B82F6] to-[#2563EB] rounded-lg flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-white" />
+                </div>
+                <span className="text-xs text-[#6B7280]">
+                  {calculatePercentage(pendingLeave, totalLeave)}% Pending
+                </span>
+              </div>
+              <p className="text-sm text-[#6B7280] mb-1">Pending Leave</p>
+              <p className="text-3xl text-[#111827] mb-2">{pendingLeave}</p>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div
+                  className="bg-gradient-to-r from-[#3B82F6] to-[#2563EB] h-2 rounded-full transition-all"
+                  style={{ width: `${calculatePercentage(pendingLeave, totalLeave)}%` }}
                 />
               </div>
             </div>
@@ -172,7 +195,7 @@ export function LeaveBalance() {
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-3 mb-3">
+                    <div className="grid grid-cols-4 gap-3 mb-3">
                       <div>
                         <p className="text-xs text-[#6B7280] mb-1">Total</p>
                         <p className="text-lg text-[#111827]">{balance.total}</p>
@@ -180,6 +203,10 @@ export function LeaveBalance() {
                       <div>
                         <p className="text-xs text-[#6B7280] mb-1">Used</p>
                         <p className="text-lg text-[#F59E0B]">{balance.used}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-[#6B7280] mb-1">Pending</p>
+                        <p className="text-lg text-[#3B82F6]">{balance.pending}</p>
                       </div>
                       <div>
                         <p className="text-xs text-[#6B7280] mb-1">Left</p>

@@ -18,14 +18,17 @@ export function canAccessPortal(employee: Employee, portal: Portal): boolean {
   }
 }
 
+const LEGACY_DASHBOARD_PATHS = new Set([
+  "/admin/dashboard",
+  "/hr/dashboard",
+  "/employee/dashboard",
+]);
+
 export function getDefaultDashboard(employee: Employee): string {
-  if (employee.landing_path) {
+  if (employee.landing_path && !LEGACY_DASHBOARD_PATHS.has(employee.landing_path)) {
     return employee.landing_path;
   }
-
-  if (employee.portal === "admin") return "/admin/dashboard";
-  if (employee.portal === "hr") return "/hr/dashboard";
-  return "/employee/dashboard";
+  return "/dashboard";
 }
 
 export function getLoginPath(): string {

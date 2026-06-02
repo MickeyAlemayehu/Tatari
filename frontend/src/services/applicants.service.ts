@@ -1,6 +1,39 @@
 import { api, apiRequest } from "../lib/api";
 import type { Paginated } from "../types/api";
 
+export type ApplicantStatus =
+  | "new"
+  | "reviewing"
+  | "shortlisted"
+  | "rejected"
+  | "hired"
+  | "interview_scheduled";
+
+export type RecommendationStatus =
+  | "pending"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "manual_review";
+
+export type RecommendationVerdict =
+  | "recommended"
+  | "consider"
+  | "not_recommended";
+
+export interface ApplicantRecommendation {
+  status: RecommendationStatus;
+  score: number | null;
+  verdict: RecommendationVerdict | null;
+  processedAt: string | null;
+  // Only present when the API returns the detailed payload (single applicant).
+  summary?: string | null;
+  strengths?: string[];
+  gaps?: string[];
+  modelVersion?: string | null;
+  errorMessage?: string | null;
+}
+
 export interface ApplicantRecord {
   id: number;
   name: string;
@@ -12,11 +45,13 @@ export interface ApplicantRecord {
   jobId?: number;
   department?: string;
   appliedDate?: string;
-  status: string;
+  status: ApplicantStatus | string;
   rating?: number;
   location?: string;
   experience?: string;
   coverLetter?: string;
+  interviewAt?: string | null;
+  recommendation?: ApplicantRecommendation | null;
 }
 
 export const applicantsService = {
@@ -31,8 +66,17 @@ export const applicantsService = {
 
   get: (id: number) => api.get<ApplicantRecord>(`/applicants/${id}`),
 
-  update: (id: number, payload: { status?: string; rating?: number; rejection_reason?: string }) =>
-    api.patch<ApplicantRecord>(`/applicants/${id}`, payload),
+  downloadResume: (id: number) => api.download(`/applicants/${id}/resume/download`),
+
+  update: (
+    id: number,
+    payload: {
+      status?: ApplicantStatus;
+      rating?: number;
+      rejection_reason?: string;
+      interview_at?: string | null;
+    }
+  ) => api.patch<ApplicantRecord>(`/applicants/${id}`, payload),
 
   apply: (jobId: number, body: FormData) =>
     apiRequest<ApplicantRecord>(`/public/jobs/${jobId}/apply`, {
@@ -40,4 +84,10 @@ export const applicantsService = {
       body,
       auth: false,
     }),
+
+  refreshRecommendation: (id: number) =>
+    api.post<{ message: string; applicantId: number }>(
+      `/applicants/${id}/recommendation/refresh`,
+      {}
+    ),
 };

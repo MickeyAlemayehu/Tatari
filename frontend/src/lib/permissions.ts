@@ -8,8 +8,7 @@ export type Permission =
   | "approve_leave"
   | "performance_create"
   | "performance_evaluate"
-  | "manage_performance_reviews"
-  | "manage_payroll";
+  | "manage_performance_reviews";
 
 export function hasEmployeePermission(
   employee: Pick<Employee, "effective_permissions"> | null | undefined,

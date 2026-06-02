@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AuditLog;
 use App\Models\Employee;
 use App\Support\EmployeePermissions;
+use App\Events\EmployeePasswordChanged;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -23,6 +25,16 @@ class ApiAuthController extends Controller
         $employee = Employee::query()->whereRaw('LOWER(email) = ?', [$email])->first();
 
         if (! $employee || ! Hash::check($credentials['password'], $employee->getAuthPassword())) {
+            $request->attributes->set('skip_audit_log', true);
+            AuditLog::record(
+                action: 'Failed login',
+                module: 'Authentication',
+                description: "Failed login attempt for email: {$email}",
+                employee: $employee,
+                status: 'failed',
+                metadata: ['email' => $email]
+            );
+
             return response()->json([
                 'message' => 'Invalid credentials.',
             ], Response::HTTP_UNAUTHORIZED);
@@ -43,6 +55,15 @@ class ApiAuthController extends Controller
         $plainToken = Str::random(80);
         $employee->api_token = hash('sha256', $plainToken);
         $employee->save();
+
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Login',
+            module: 'Authentication',
+            description: "User logged in successfully",
+            employee: $employee,
+            status: 'success'
+        );
 
         $employee->load('department:id,name');
 
@@ -72,6 +93,15 @@ class ApiAuthController extends Controller
         $employee->api_token = null;
         $employee->save();
 
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Logout',
+            module: 'Authentication',
+            description: "User logged out",
+            employee: $employee,
+            status: 'success'
+        );
+
         return response()->json(['message' => 'Logged out successfully.']);
     }
 
@@ -81,5 +111,42 @@ class ApiAuthController extends Controller
         $employee->load('department:id,name');
 
         return response()->json(EmployeePermissions::toAuthArray($employee));
+    }
+
+    public function changePassword(Request $request): JsonResponse
+    {
+        $employee = $request->user('api');
+
+        if (! $employee) {
+            return response()->json(['message' => 'Unauthenticated.'], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'new_password' => ['required', 'string', 'min:8', 'different:current_password'],
+        ]);
+
+        if (! Hash::check($data['current_password'], $employee->getAuthPassword())) {
+            return response()->json([
+                'message' => 'Current password is incorrect.',
+            ], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
+        $employee->password = $data['new_password'];
+        $employee->must_change_password = false;
+        $employee->save();
+
+        event(new EmployeePasswordChanged($employee));
+
+        $request->attributes->set('skip_audit_log', true);
+        AuditLog::record(
+            action: 'Password changed',
+            module: 'Authentication',
+            description: "User changed their password",
+            employee: $employee,
+            status: 'success'
+        );
+
+        return response()->json(['message' => 'Password updated successfully.']);
     }
 }

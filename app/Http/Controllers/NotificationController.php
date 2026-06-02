@@ -26,7 +26,7 @@ class NotificationController extends Controller
         }
 
         return response()->json($query->paginate($request->integer('per_page', 15))
-            ->through(fn (Notification $notification) => $this->payload($notification)));
+            ->through(fn (Notification $notification) => $notification->toPayload()));
     }
 
     public function unreadCount(Request $request): JsonResponse
@@ -47,7 +47,7 @@ class NotificationController extends Controller
 
         $notification->update(['is_read' => true]);
 
-        return response()->json($this->payload($notification->fresh()));
+        return response()->json($notification->fresh()->toPayload());
     }
 
     public function markAllAsRead(Request $request): JsonResponse
@@ -101,44 +101,4 @@ class NotificationController extends Controller
         }
     }
 
-    private function payload(Notification $notification): array
-    {
-        return [
-            'id' => $notification->id,
-            'title' => $notification->title,
-            'message' => $notification->message,
-            'type' => $this->uiType($notification->notification_type),
-            'category' => $this->category($notification->notification_type),
-            'notification_type' => $notification->notification_type,
-            'timestamp' => $notification->created_at?->diffForHumans(),
-            'created_at' => $notification->created_at,
-            'read' => $notification->is_read,
-            'is_read' => $notification->is_read,
-            'reference_type' => $notification->reference_type,
-            'reference_id' => $notification->reference_id,
-        ];
-    }
-
-    private function uiType(string $type): string
-    {
-        return match ($type) {
-            'payroll', 'employee', 'recruitment' => 'success',
-            'performance' => 'warning',
-            'system', 'alert' => 'alert',
-            default => 'info',
-        };
-    }
-
-    private function category(string $type): string
-    {
-        return match ($type) {
-            'leave' => 'Leave',
-            'payroll' => 'Payroll',
-            'recruitment' => 'Recruitment',
-            'performance' => 'Performance',
-            'employee' => 'Employee',
-            'system' => 'System',
-            default => ucfirst($type),
-        };
-    }
 }

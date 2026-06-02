@@ -20,7 +20,8 @@ class DatabaseSeeder extends Seeder
             LeaveSeeder::class,
             RecruitmentSeeder::class,
             PerformanceReviewSeeder::class,
-            PerformanceEvaluationWorkflowSeeder::class,
+            EvaluationTemplateSeeder::class,           // seeds template + questions first
+            PerformanceEvaluationWorkflowSeeder::class, // then links period + answers
             NotificationSeeder::class,
             PayrollSeeder::class,
         ]);

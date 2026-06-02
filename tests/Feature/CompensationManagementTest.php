@@ -86,6 +86,23 @@ class CompensationManagementTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_forbidden_response_is_json_even_without_accept_header(): void
+    {
+        $staff = Employee::factory()->staff()->create();
+        $employee = Employee::factory()->staff()->create();
+
+        $response = $this->actingAs($staff, 'api')->post('/api/compensations', [
+            'employee_id' => $employee->id,
+            'basic_salary' => 5000,
+            'currency' => 'USD',
+            'effective_from' => '2026-01-01',
+        ]);
+
+        $response->assertForbidden();
+        $this->assertStringContainsString('application/json', $response->headers->get('content-type') ?? '');
+        $this->assertIsString($response->json('message'));
+    }
+
     public function test_can_list_compensations_for_employee(): void
     {
         $manager = Employee::factory()->manager()->create([

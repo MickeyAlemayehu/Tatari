@@ -10,7 +10,7 @@ class EvaluationPeriod extends Model
     use HasFactory;
 
     protected $fillable = [
-        'company_id','name','start_date','end_date','status'
+        'company_id','template_id','name','start_date','end_date','status'
     ];
 
     protected $casts = [
@@ -20,6 +20,16 @@ class EvaluationPeriod extends Model
 
     public function company() {
         return $this->belongsTo(Company::class);
+    }
+
+    public function template() {
+        return $this->belongsTo(EvaluationTemplate::class, 'template_id');
+    }
+
+    public function templates() {
+        return $this->belongsToMany(EvaluationTemplate::class, 'evaluation_period_templates', 'evaluation_period_id', 'template_id')
+            ->withPivot('evaluation_type', 'department_id')
+            ->withTimestamps();
     }
 
     public function assignments() {

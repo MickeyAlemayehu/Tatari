@@ -16,10 +16,12 @@ export interface Employee {
   portal?: Portal | null | undefined;
   landing_path?: string | undefined;
   status?: string;
+  deactivated_at?: string | null;
   department?: {
     id: number;
     name: string;
   } | null;
+  must_change_password?: boolean;
 }
 
 export interface LoginResponse {

@@ -13,7 +13,8 @@ class EvaluationAssignment extends Model
 
     protected $fillable = [
         'evaluation_period_id','employee_id','evaluator_id',
-        'evaluator_type','assigned_by','assigned_at'
+        'evaluator_type','template_id','evaluator_role',
+        'assigned_by','assigned_at'
     ];
 
     protected $casts = [
@@ -30,6 +31,10 @@ class EvaluationAssignment extends Model
 
     public function evaluator() {
         return $this->belongsTo(Employee::class, 'evaluator_id');
+    }
+
+    public function template() {
+        return $this->belongsTo(EvaluationTemplate::class, 'template_id');
     }
 
     public function evaluation() {

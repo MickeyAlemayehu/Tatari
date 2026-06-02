@@ -65,6 +65,10 @@ class EmployeePermissions
         return $level;
     }
 
+    /**
+     * Strict formula: role_defaults + individually_granted - individually_revoked.
+     * No aliasing, no implicit grants, no cross-permission expansion.
+     */
     public static function effectivePermissions(Employee $employee): array
     {
         $level = self::normalizeLevel((int) $employee->permission_level);
@@ -125,6 +129,7 @@ class EmployeePermissions
             'level_name' => self::levelName($level),
             'permission_override' => $employee->permission_override,
             'revoked_permissions' => $employee->revoked_permissions,
+            'must_change_password' => $employee->must_change_password,
             'status' => $employee->status,
             'department' => $employee->department ? [
                 'id' => $employee->department->id,
